@@ -2,13 +2,22 @@
 
 
 [[projects]]
-  digest = "1:d3bdf0b7d72f9a502ed0f4de0d41ff27e69cbddd44b62c08e5907ae7fa2879fa"
+  digest = "1:9f97b7aab30b92f39d9ab081435d623e5dfcd94e9a67c430c21cf3aa838af189"
   name = "github.com/aws/aws-sdk-go-v2"
   packages = [
     "aws",
     "aws/awserr",
+    "aws/signer/v4",
     "internal/awsutil",
     "internal/sdk",
+    "private/protocol",
+    "private/protocol/query",
+    "private/protocol/query/queryutil",
+    "private/protocol/rest",
+    "private/protocol/restxml",
+    "private/protocol/xml",
+    "private/protocol/xml/xmlutil",
+    "service/s3",
   ]
   pruneopts = "UT"
   revision = "0143dbcf72cf30047f4830d714f7511e74d44034"
@@ -41,7 +50,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/aws/aws-sdk-go-v2/aws",
+    "github.com/aws/aws-sdk-go-v2/service/s3",
     "github.com/gorilla/mux",
   ]
   solver-name = "gps-cdcl"
