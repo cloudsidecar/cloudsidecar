@@ -2,13 +2,21 @@
 
 
 [[projects]]
-  digest = "1:9f97b7aab30b92f39d9ab081435d623e5dfcd94e9a67c430c21cf3aa838af189"
+  digest = "1:303a306cefbdb62f9f65e89e841624dff2acae2fc32639b0432b6d4a42d762fc"
   name = "github.com/aws/aws-sdk-go-v2"
   packages = [
     "aws",
     "aws/awserr",
+    "aws/defaults",
+    "aws/ec2metadata",
+    "aws/ec2rolecreds",
+    "aws/endpointcreds",
+    "aws/endpoints",
+    "aws/external",
     "aws/signer/v4",
+    "aws/stscreds",
     "internal/awsutil",
+    "internal/ini",
     "internal/sdk",
     "private/protocol",
     "private/protocol/query",
@@ -18,6 +26,7 @@
     "private/protocol/xml",
     "private/protocol/xml/xmlutil",
     "service/s3",
+    "service/sts",
   ]
   pruneopts = "UT"
   revision = "0143dbcf72cf30047f4830d714f7511e74d44034"
@@ -46,12 +55,22 @@
   pruneopts = "UT"
   revision = "0b12d6b5"
 
+[[projects]]
+  digest = "1:4d2e5a73dc1500038e504a8d78b986630e3626dc027bc030ba5c75da257cdb96"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "51d6538a90f86fe93ac480b35f37b2be17fef232"
+  version = "v2.2.2"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/aws/aws-sdk-go-v2/aws/external",
     "github.com/aws/aws-sdk-go-v2/service/s3",
     "github.com/gorilla/mux",
+    "gopkg.in/yaml.v2",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
