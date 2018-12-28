@@ -6,6 +6,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/mux"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 type S3Handler struct {
@@ -79,6 +81,42 @@ func (handler S3Handler) S3ACL(writer http.ResponseWriter, request *http.Request
 	fmt.Printf("Response %s", resp)
 	writeLine(xmlHeader, &writer)
 	writeLine(string(output), &writer)
+	return
+}
+
+func (handler S3Handler) S3HeadFile(writer http.ResponseWriter, request *http.Request) {
+	vars := mux.Vars(request)
+	bucket := vars["bucket"]
+	key := vars["key"]
+	fmt.Printf("Looking for %s %s\n", bucket, key)
+	fmt.Printf("URL %s\n", request.URL)
+	req := handler.S3Client.HeadObjectRequest(&s3.HeadObjectInput{Bucket: &bucket, Key: &key})
+	resp, respError := req.Send()
+	if respError != nil {
+		writer.WriteHeader(404)
+		fmt.Printf("Error %s", respError)
+		return
+	}
+	fmt.Printf("Response %s\n", resp.String())
+	if resp.AcceptRanges != nil {
+		writer.Header().Set("Accept-Ranges", *resp.AcceptRanges)
+	}
+	if resp.ContentLength != nil {
+		writer.Header().Set("Content-Length", strconv.FormatInt(*resp.ContentLength, 10))
+	}
+	if resp.CacheControl != nil {
+		writer.Header().Set("Cache-Control", *resp.CacheControl)
+	}
+	if resp.ContentType != nil {
+		writer.Header().Set("Content-Type", *resp.ContentType)
+	}
+	if resp.ETag != nil {
+		writer.Header().Set("ETag", *resp.ETag)
+	}
+	if resp.LastModified != nil {
+		writer.Header().Set("Last-Modified", resp.LastModified.Format(time.RFC1123Z))
+	}
+	writer.WriteHeader(200)
 	return
 }
 

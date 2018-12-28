@@ -37,6 +37,7 @@ func main() {
 		r.HandleFunc("/{bucket}/", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
 		r.HandleFunc("/{bucket}", s3Handler.S3List).Methods("GET")
 		r.HandleFunc("/{bucket}/", s3Handler.S3List).Methods("GET")
+		r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3HeadFile).Methods("HEAD")
 		srv := &http.Server{
 			Handler: r,
 			Addr:    fmt.Sprintf("127.0.0.1:%d", port),
