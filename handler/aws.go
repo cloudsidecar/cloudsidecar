@@ -38,9 +38,43 @@ type Grantee struct {
 	Xsi string `xml:"xsi:type,attr"`
 }
 
+type AWSListBucketResponse struct {
+	XMLName xml.Name `xml:"ListBucketResult"`
+	XmlNS string `xml:"xmlns,attr"`
+	Name *string `xml:"Name"`
+	Prefix *string `xml:"Prefix"`
+	Delimiter *string `xml:"Delimiter,omitempty"`
+	StartAfter *string `xml:"StartAfter,omitempty"`
+	KeyCount int64 `xml:"KeyCount"`
+	MaxKeys *int64 `xml:"MaxKeys"`
+	IsTruncated *bool `xml:"IsTruncated"`
+	Contents []*BucketContent `xml:"Contents"`
+	CommonPrefixes []*BucketCommonPrefix `xml:"CommonPrefixes,omitempty"`
+}
+
+type BucketContent struct {
+	Key string `xml:"Key"`
+	LastModified string `xml:"LastModified"`
+	ETag string `xml:"ETag"`
+	Size int64 `xml:"Size"`
+	StorageClass string `xml:"StorageClass"`
+}
+
+type BucketCommonPrefix struct {
+	Prefix string `xml:"Prefix"`
+}
+
 const (
 	xmlHeader string = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
 )
+
+func write(input string, writer *http.ResponseWriter) {
+	line := fmt.Sprintf("%s", input)
+	_, err := (*writer).Write([]byte(line))
+	if err != nil {
+		panic(fmt.Sprintf("Error %s", err))
+	}
+}
 
 func writeLine(input string, writer *http.ResponseWriter) {
 	line := fmt.Sprintf("%s\n", input)
@@ -123,15 +157,65 @@ func (handler S3Handler) S3HeadFile(writer http.ResponseWriter, request *http.Re
 func (handler S3Handler) S3List(writer http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	bucket := vars["bucket"]
-	req := handler.S3Client.ListObjectsRequest(&s3.ListObjectsInput{Bucket: &bucket})
+	fmt.Printf("Headers: %s", request.URL)
+	listRequest := &s3.ListObjectsInput{Bucket: &bucket}
+	delim := request.URL.Query().Get("delimiter")
+	listRequest.Delimiter = &delim
+	if encodingType := request.URL.Query().Get("encoding-type"); encodingType == "url" {
+		listRequest.EncodingType = s3.EncodingTypeUrl
+	}
+	if maxKeys := request.URL.Query().Get("max-keys"); maxKeys != "" {
+		maxKeyInt, _ := strconv.ParseInt(maxKeys, 10, 64)
+		listRequest.MaxKeys = &maxKeyInt
+	}
+	prefix := request.URL.Query().Get("prefix")
+	listRequest.Prefix = &prefix
+	if startAfter := request.Header.Get("start-after"); startAfter != "" {
+		listRequest.Marker = &startAfter
+	}
+	fmt.Printf("Requesting %s", listRequest)
+	req := handler.S3Client.ListObjectsRequest(listRequest)
 	resp, respError := req.Send()
 	if respError != nil {
 		panic(fmt.Sprintf("Error %s", respError))
 	}
-	fmt.Printf("Response %s", resp)
-	_, err := writer.Write([]byte("test"))
-	if err != nil {
-		panic(fmt.Sprintf("Error %s", err))
+	var contents = make([]*BucketContent, len(resp.Contents))
+	for i, content := range resp.Contents {
+		contents[i] = &BucketContent{
+			Key: *content.Key,
+			LastModified: content.LastModified.Format(time.RFC3339),
+			ETag: *content.ETag,
+			Size: *content.Size,
+			StorageClass: string(content.StorageClass),
+		}
 	}
+	var prefixes = make([]*BucketCommonPrefix, len(resp.CommonPrefixes))
+	for i, prefix := range resp.CommonPrefixes {
+		prefixes[i] = &BucketCommonPrefix{
+			*prefix.Prefix,
+		}
+	}
+	s3Resp := &AWSListBucketResponse{
+		XmlNS: "http://s3.amazonaws.com/doc/2006-03-01/",
+		Name: resp.Name,
+		Prefix: resp.Prefix,
+		Delimiter: nil,
+		StartAfter: nil,
+		KeyCount: int64(len(contents)),
+		MaxKeys: resp.MaxKeys,
+		IsTruncated: resp.IsTruncated,
+		Contents: contents,
+		CommonPrefixes: prefixes,
+	}
+	if resp.Delimiter != nil && *resp.Delimiter != "" {
+		s3Resp.Delimiter = resp.Delimiter
+	}
+	if resp.Marker != nil && *resp.Marker != "" {
+		s3Resp.StartAfter = resp.Marker
+	}
+	output, _ := xml.Marshal(s3Resp)
+	fmt.Printf("Response %s", resp)
+	writeLine(xmlHeader, &writer)
+	write(string(output), &writer)
 	return
 }

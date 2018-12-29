@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"plugin"
 	conf "sidecar/config"
 	myhandler "sidecar/handler"
 	"time"
@@ -38,6 +37,10 @@ func main() {
 		r.HandleFunc("/{bucket}", s3Handler.S3List).Methods("GET")
 		r.HandleFunc("/{bucket}/", s3Handler.S3List).Methods("GET")
 		r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3HeadFile).Methods("HEAD")
+		r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			fmt.Printf("Catch all %s %s %s", request.URL, request.Method, request.Header)
+			writer.WriteHeader(404)
+		})
 		srv := &http.Server{
 			Handler: r,
 			Addr:    fmt.Sprintf("127.0.0.1:%d", port),
@@ -52,6 +55,7 @@ func main() {
 	r := mux.NewRouter()
 	s3 := myhandler.S3Handler{S3Client: nil}
 	r.HandleFunc("/test", s3.S3List).Methods("GET")
+	/*
 	plug, err := plugin.Open("eng.so")
 	if err != nil {
 		panic(err)
@@ -60,10 +64,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	r.HandleFunc("/boo", func(writer http.ResponseWriter, request *http.Request) {
-		writer.Write([]byte("HAR "))
-	}).Methods("GET")
 	r.HandleFunc("/sym", sym.(func(http.ResponseWriter, *http.Request))).Methods("GET")
+	*/
 	srv := &http.Server{
 		Handler: r,
 		Addr:    "127.0.0.1:8000",
