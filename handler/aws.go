@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
 	"github.com/gorilla/mux"
 	"io"
 	"net/http"
@@ -124,6 +125,37 @@ func (handler S3Handler) S3ACL(writer http.ResponseWriter, request *http.Request
 	fmt.Printf("Response %s", resp)
 	writeLine(xmlHeader, &writer)
 	writeLine(string(output), &writer)
+	return
+}
+
+func (handler S3Handler) S3PutFile(writer http.ResponseWriter, request *http.Request) {
+	vars := mux.Vars(request)
+	bucket := vars["bucket"]
+	key := vars["key"]
+	s3Req := &s3manager.UploadInput{
+		Bucket: &bucket,
+		Key: &key,
+
+	}
+	if header := request.Header.Get("Content-MD5"); header != "" {
+		s3Req.ContentMD5 = &header
+	}
+	if header := request.Header.Get("Content-Type"); header != "" {
+		s3Req.ContentType = &header
+	}
+	defer request.Body.Close()
+	uploader := s3manager.NewUploaderWithClient(handler.S3Client)
+	_, err := uploader.Upload(&s3manager.UploadInput{
+		Bucket: &bucket,
+		Key: &key,
+		Body: request.Body,
+	})
+	if err != nil {
+		fmt.Printf("Error %s", err)
+	}
+	writer.WriteHeader(200)
+	fmt.Printf("DONE")
+	write("", &writer)
 	return
 }
 

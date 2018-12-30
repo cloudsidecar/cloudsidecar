@@ -38,6 +38,7 @@ func main() {
 		r.HandleFunc("/{bucket}/", s3Handler.S3List).Methods("GET")
 		r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3HeadFile).Methods("HEAD")
 		r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3GetFile).Methods("GET")
+		r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3PutFile).Methods("PUT")
 		r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			fmt.Printf("Catch all %s %s %s", request.URL, request.Method, request.Header)
 			writer.WriteHeader(404)

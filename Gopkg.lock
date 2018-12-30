@@ -2,21 +2,15 @@
 
 
 [[projects]]
-  digest = "1:303a306cefbdb62f9f65e89e841624dff2acae2fc32639b0432b6d4a42d762fc"
+  digest = "1:32fb2fbe0d1194d8a97c931eaa19c486874f7984fe65b9cde0b5df7631c51d1d"
   name = "github.com/aws/aws-sdk-go-v2"
   packages = [
     "aws",
     "aws/awserr",
     "aws/defaults",
-    "aws/ec2metadata",
-    "aws/ec2rolecreds",
-    "aws/endpointcreds",
     "aws/endpoints",
-    "aws/external",
     "aws/signer/v4",
-    "aws/stscreds",
     "internal/awsutil",
-    "internal/ini",
     "internal/sdk",
     "private/protocol",
     "private/protocol/query",
@@ -26,7 +20,8 @@
     "private/protocol/xml",
     "private/protocol/xml/xmlutil",
     "service/s3",
-    "service/sts",
+    "service/s3/s3iface",
+    "service/s3/s3manager",
   ]
   pruneopts = "UT"
   revision = "0143dbcf72cf30047f4830d714f7511e74d44034"
@@ -67,8 +62,11 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/aws/aws-sdk-go-v2/aws/external",
+    "github.com/aws/aws-sdk-go-v2/aws",
+    "github.com/aws/aws-sdk-go-v2/aws/defaults",
+    "github.com/aws/aws-sdk-go-v2/aws/endpoints",
     "github.com/aws/aws-sdk-go-v2/service/s3",
+    "github.com/aws/aws-sdk-go-v2/service/s3/s3manager",
     "github.com/gorilla/mux",
     "gopkg.in/yaml.v2",
   ]
