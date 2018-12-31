@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bufio"
 	"encoding/xml"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -65,6 +66,48 @@ type BucketContent struct {
 
 type BucketCommonPrefix struct {
 	Prefix string `xml:"Prefix"`
+}
+
+type ChunkedReaderWrapper struct {
+	Reader         *io.ReadCloser
+	BufferedReader *bufio.Reader
+	ContentLength  *int64
+	Buffer         *[]byte
+	ChunkRead      int
+	ChunkSize      *int
+	Leftover *string
+}
+
+func (wrapper ChunkedReaderWrapper) Read(p []byte) (n int, err error) {
+	if *wrapper.ChunkSize == 0 {
+		chunkedHeader, err := wrapper.BufferedReader.ReadString('\n')
+		if err != nil {
+			fmt.Printf("Error reading header %s", err)
+			return 0, err
+		}
+		if wrapper.Leftover != nil && len(*wrapper.Leftover) > 0 {
+			chunkedHeader = *wrapper.Leftover + chunkedHeader
+		}
+		wrapper.Leftover = nil
+		chunkedHeader = strings.Replace(chunkedHeader, "\r\n", "", 1)
+		chunkedSplit := strings.SplitN(chunkedHeader, ";", 2)
+		chunkSize, _ := strconv.Atoi(chunkedSplit[0])
+		wrapper.ChunkSize = &chunkSize
+		if chunkSize == 0 {
+			return 0, io.EOF
+		}
+	}
+	bytesRead, err := wrapper.BufferedReader.Read(*wrapper.Buffer)
+	chunkLeft := *wrapper.ChunkSize - wrapper.ChunkRead
+	if chunkLeft < bytesRead {
+		slice := (*wrapper.Buffer)[:chunkLeft]
+		leftover := string(slice[chunkLeft + 2:])
+		wrapper.Leftover = &leftover
+		return chunkLeft, nil
+	} else {
+		wrapper.ChunkRead += bytesRead
+		return bytesRead, err
+	}
 }
 
 const (
@@ -143,13 +186,41 @@ func (handler S3Handler) S3PutFile(writer http.ResponseWriter, request *http.Req
 	if header := request.Header.Get("Content-Type"); header != "" {
 		s3Req.ContentType = &header
 	}
+	isChunked := false
+	if header := request.Header.Get("x-amz-content-sha256"); header == " STREAMING-AWS4-HMAC-SHA256-PAYLOAD" {
+		isChunked = true
+	}
+	var contentLength int64
+	if header := request.Header.Get("x-amz-decoded-content-length"); header != "" {
+		contentLength, _ = strconv.ParseInt(header, 10, 64)
+	} else if header := request.Header.Get("x-amz-decoded-content-length"); header != "" {
+		contentLength, _ = strconv.ParseInt(header, 10, 64)
+	}
 	defer request.Body.Close()
 	uploader := s3manager.NewUploaderWithClient(handler.S3Client)
-	_, err := uploader.Upload(&s3manager.UploadInput{
-		Bucket: &bucket,
-		Key: &key,
-		Body: request.Body,
-	})
+	var err error
+	if !isChunked {
+		_, err = uploader.Upload(&s3manager.UploadInput{
+			Bucket: &bucket,
+			Key: &key,
+			Body: request.Body,
+		})
+	} else {
+		buffer := make([]byte, 4096)
+		readerWrapper := ChunkedReaderWrapper{
+			Reader:         &request.Body,
+			ContentLength:  &contentLength,
+			Buffer:         &buffer,
+			ChunkRead:      0,
+			BufferedReader: bufio.NewReader(request.Body),
+		}
+		_, err = uploader.Upload(&s3manager.UploadInput{
+			Bucket: &bucket,
+			Key: &key,
+			Body: readerWrapper,
+		})
+
+	}
 	if err != nil {
 		fmt.Printf("Error %s", err)
 	}
