@@ -273,7 +273,7 @@ func (handler S3Handler) S3GetFile(writer http.ResponseWriter, request *http.Req
 	if header := request.Header.Get("Range"); header != "" {
 		s3Req.Range = &header
 	}
-	req := handler.S3Client.GetObjectRequest(&s3.GetObjectInput{Bucket: &bucket, Key: &key})
+	req := handler.S3Client.GetObjectRequest(s3Req)
 	resp, respError := req.Send()
 	if respError != nil {
 		writer.WriteHeader(404)
