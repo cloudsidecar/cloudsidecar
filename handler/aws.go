@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"bufio"
 	"encoding/xml"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -70,43 +69,82 @@ type BucketCommonPrefix struct {
 
 type ChunkedReaderWrapper struct {
 	Reader         *io.ReadCloser
-	BufferedReader *bufio.Reader
 	ContentLength  *int64
 	Buffer         *[]byte
-	ChunkRead      int
-	ChunkSize      *int
-	Leftover *string
+	ChunkPosition      int
+	ChunkSize      int
+}
+
+func (wrapper ChunkedReaderWrapper) ReadHeaderGetChunkSize() (i int, err error) {
+	chunkedHeader, err := wrapper.ReadHeader()
+	if err != nil {
+		fmt.Printf("Error reading header %s", err)
+		return 0, err
+	}
+	fmt.Printf("Read header %s\n", chunkedHeader)
+	chunkedSplit := strings.SplitN(chunkedHeader, ";", 2)
+	chunkSize, err := strconv.ParseInt(chunkedSplit[0], 16, 32)
+	return int(chunkSize), err
+}
+
+func (wrapper ChunkedReaderWrapper) ReadHeader() (s string, err error) {
+	oneByte := make([]byte, 1)
+	readCount := 0
+	header := make([]byte, 4096)
+	for {
+		_, err := io.ReadFull(*wrapper.Reader, oneByte)
+		if err != nil {
+			return string(header[:readCount]), err
+		}
+		if oneByte[0] == '\r' {
+			// read \n
+			io.ReadFull(*wrapper.Reader, oneByte)
+			if readCount != 0 {
+				return string(header[:readCount]), nil
+			} else {
+				// \r is first char
+				io.ReadFull(*wrapper.Reader, oneByte)
+			}
+		}
+		if readCount >= len(header) {
+			return string(header[:readCount]), io.ErrShortBuffer
+		}
+		header[readCount] = oneByte[0]
+		readCount++
+	}
 }
 
 func (wrapper ChunkedReaderWrapper) Read(p []byte) (n int, err error) {
-	if *wrapper.ChunkSize == 0 {
-		chunkedHeader, err := wrapper.BufferedReader.ReadString('\n')
+	if wrapper.Buffer == nil || len(*wrapper.Buffer) == 0 {
+		chunkSize, err := wrapper.ReadHeaderGetChunkSize()
+		fmt.Printf("Chunk size %d\n", chunkSize)
 		if err != nil {
 			fmt.Printf("Error reading header %s", err)
 			return 0, err
 		}
-		if wrapper.Leftover != nil && len(*wrapper.Leftover) > 0 {
-			chunkedHeader = *wrapper.Leftover + chunkedHeader
-		}
-		wrapper.Leftover = nil
-		chunkedHeader = strings.Replace(chunkedHeader, "\r\n", "", 1)
-		chunkedSplit := strings.SplitN(chunkedHeader, ";", 2)
-		chunkSize, _ := strconv.Atoi(chunkedSplit[0])
-		wrapper.ChunkSize = &chunkSize
+		wrapper.ChunkSize = chunkSize
 		if chunkSize == 0 {
 			return 0, io.EOF
 		}
+		buffer := make([]byte, chunkSize)
+		wrapper.Buffer = &buffer
+		_, err = io.ReadFull(*wrapper.Reader, buffer)
+		if err != nil {
+			fmt.Printf("Error reading all %s", err)
+			return 0, err
+		}
 	}
-	bytesRead, err := wrapper.BufferedReader.Read(*wrapper.Buffer)
-	chunkLeft := *wrapper.ChunkSize - wrapper.ChunkRead
-	if chunkLeft < bytesRead {
-		slice := (*wrapper.Buffer)[:chunkLeft]
-		leftover := string(slice[chunkLeft + 2:])
-		wrapper.Leftover = &leftover
-		return chunkLeft, nil
+	bytesLeft := len(*wrapper.Buffer)
+	pSize := len(p)
+	if pSize <= bytesLeft {
+		copy(p, (*wrapper.Buffer)[:pSize])
+		newBuffer := (*wrapper.Buffer)[pSize:]
+		wrapper.Buffer = &newBuffer
+		return pSize, nil
 	} else {
-		wrapper.ChunkRead += bytesRead
-		return bytesRead, err
+		n := copy(p, *wrapper.Buffer)
+		wrapper.Buffer = nil
+		return n, nil
 	}
 }
 
@@ -187,7 +225,7 @@ func (handler S3Handler) S3PutFile(writer http.ResponseWriter, request *http.Req
 		s3Req.ContentType = &header
 	}
 	isChunked := false
-	if header := request.Header.Get("x-amz-content-sha256"); header == " STREAMING-AWS4-HMAC-SHA256-PAYLOAD" {
+	if header := request.Header.Get("x-amz-content-sha256"); header == "STREAMING-AWS4-HMAC-SHA256-PAYLOAD" {
 		isChunked = true
 	}
 	var contentLength int64
@@ -206,13 +244,10 @@ func (handler S3Handler) S3PutFile(writer http.ResponseWriter, request *http.Req
 			Body: request.Body,
 		})
 	} else {
-		buffer := make([]byte, 4096)
+		fmt.Printf("CHUNKED %d", contentLength)
 		readerWrapper := ChunkedReaderWrapper{
 			Reader:         &request.Body,
 			ContentLength:  &contentLength,
-			Buffer:         &buffer,
-			ChunkRead:      0,
-			BufferedReader: bufio.NewReader(request.Body),
 		}
 		_, err = uploader.Upload(&s3manager.UploadInput{
 			Bucket: &bucket,
