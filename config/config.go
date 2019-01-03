@@ -16,8 +16,8 @@ type AWSConfig struct {
 	ServiceType string `service_type`
 	Port int `port`
 	UrlPrefix string `url_prefix`
-	DestinationAWSConfig AWSDestinationConfig `aws_destination_config`
-	DestinationGCPConfig GCPDestinationConfig `gcp_destination_config`
+	DestinationAWSConfig *AWSDestinationConfig `aws_destination_config`
+	DestinationGCPConfig *GCPDestinationConfig `gcp_destination_config`
 }
 
 type AWSDestinationConfig struct {
@@ -28,15 +28,14 @@ type AWSDestinationConfig struct {
 
 type GCPDestinationConfig struct {
 	Name string `name`
-	AccessKeyId string `access_key_id`
-	SecretAccessKey string `secret_access_key`
+	KeyFileLocation string `key_file_location`
 }
 
 type GCPConfig struct {
 	ServiceType string `service_type`
 	Port int `port`
-	DestinationAWSConfig AWSDestinationConfig `aws_destination_config`
-	DestinationGCPConfig GCPDestinationConfig `gcp_destination_config`
+	DestinationAWSConfig *AWSDestinationConfig `aws_destination_config`
+	DestinationGCPConfig *GCPDestinationConfig `gcp_destination_config`
 }
 
 func FromFile(filename string) *Config {

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"cloud.google.com/go/storage"
+	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/defaults"
 	"github.com/aws/aws-sdk-go-v2/aws/endpoints"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/mux"
+	"google.golang.org/api/option"
 	"log"
 	"net/http"
 	"os"
@@ -17,6 +20,10 @@ import (
 
 type Handler interface {
 	handleGet(writer http.ResponseWriter, request *http.Request)
+}
+
+func newGCPStorage(ctx context.Context, keyFileLocation string) (*storage.Client, error) {
+	return storage.NewClient(ctx, option.WithCredentialsFile(keyFileLocation))
 }
 
 func main() {
@@ -32,6 +39,15 @@ func main() {
 		configs.Region = endpoints.UsEast1RegionID
 		svc := s3.New(configs)
 		s3Handler := myhandler.S3Handler{S3Client: svc}
+		if awsConfig.DestinationGCPConfig != nil {
+			ctx := context.Background()
+			gcpClient, err := newGCPStorage(ctx, awsConfig.DestinationGCPConfig.KeyFileLocation)
+			if err != nil {
+				panic(fmt.Sprintln("Error setting up gcp client", err))
+			}
+			s3Handler.GCPClient = gcpClient
+			s3Handler.Context = &ctx
+		}
 		r.HandleFunc("/{bucket}", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
 		r.HandleFunc("/{bucket}/", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
 		r.HandleFunc("/{bucket}", s3Handler.S3List).Methods("GET")

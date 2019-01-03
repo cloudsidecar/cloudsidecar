@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"cloud.google.com/go/storage"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -8,6 +10,8 @@ import (
 	"github.com/gorilla/mux"
 	"io"
 	"net/http"
+	"sidecar/converter"
+	"sidecar/response_type"
 	"strconv"
 	"strings"
 	"time"
@@ -15,57 +19,10 @@ import (
 
 type S3Handler struct {
 	S3Client *s3.S3
+	GCPClient *storage.Client
+	Context *context.Context
 }
 
-type AWSACLResponse struct {
-	XMLName xml.Name `xml:"AccessControlPolicy"`
-	OwnerId string `xml:"Owner>ID"`
-	OwnerDisplayName string `xml:"Owner>DisplayName"`
-	AccessControlList *AccessControlList `xml:"AccessControlList"`
-}
-
-type AccessControlList struct {
-	Grants []*Grant `xml:"Grant"`
-}
-
-type Grant struct {
-	Grantee *Grantee `xml:"Grantee"`
-	Permission string `xml:"Permission"`
-}
-
-type Grantee struct {
-	XMLName xml.Name `xml:"Grantee"`
-	Id string `xml:"ID"`
-	DisplayName string `xml:"DisplayName"`
-	XmlNS string `xml:"xmlns:xsi,attr"`
-	Xsi string `xml:"xsi:type,attr"`
-}
-
-type AWSListBucketResponse struct {
-	XMLName xml.Name `xml:"ListBucketResult"`
-	XmlNS string `xml:"xmlns,attr"`
-	Name *string `xml:"Name"`
-	Prefix *string `xml:"Prefix"`
-	Delimiter *string `xml:"Delimiter,omitempty"`
-	Marker *string `xml:"Marker"`
-	KeyCount int64 `xml:"KeyCount"`
-	MaxKeys *int64 `xml:"MaxKeys"`
-	IsTruncated *bool `xml:"IsTruncated"`
-	Contents []*BucketContent `xml:"Contents"`
-	CommonPrefixes []*BucketCommonPrefix `xml:"CommonPrefixes,omitempty"`
-}
-
-type BucketContent struct {
-	Key string `xml:"Key"`
-	LastModified string `xml:"LastModified"`
-	ETag string `xml:"ETag"`
-	Size int64 `xml:"Size"`
-	StorageClass string `xml:"StorageClass"`
-}
-
-type BucketCommonPrefix struct {
-	Prefix string `xml:"Prefix"`
-}
 
 type ChunkedReaderWrapper struct {
 	Reader         *io.ReadCloser
@@ -183,30 +140,42 @@ func (handler S3Handler) S3ACL(writer http.ResponseWriter, request *http.Request
 	if respError != nil {
 		panic(fmt.Sprintf("Error %s", respError))
 	}
-	var grants = make([]*Grant, len(resp.Grants))
-	for i, grant := range resp.Grants {
-		grants[i] = &Grant{
-			Grantee: &Grantee{
-				Id: *grant.Grantee.ID,
-				DisplayName: *grant.Grantee.DisplayName,
-				XmlNS: "http://www.w3.org/2001/XMLSchema-instance",
-				Xsi: "CanonicalUser",
-			},
-			Permission: string(grant.Permission),
+	if handler.GCPClient != nil {
+		acl := handler.GCPClient.Bucket(bucket).ACL()
+		aclList, err := acl.List(*handler.Context)
+		if err != nil {
+			panic(fmt.Sprintf("Error with GCP %s", err))
 		}
+		output, _ := xml.MarshalIndent(converter.GCSACLResponseToAWS(aclList), "  ", "    ")
+		fmt.Printf("Response %s", aclList)
+		writeLine(xmlHeader, &writer)
+		writeLine(string(output), &writer)
+	} else {
+		var grants = make([]*response_type.Grant, len(resp.Grants))
+		for i, grant := range resp.Grants {
+			grants[i] = &response_type.Grant{
+				Grantee: &response_type.Grantee{
+					Id: *grant.Grantee.ID,
+					DisplayName: *grant.Grantee.DisplayName,
+					XmlNS: response_type.ACLXmlNs,
+					Xsi: response_type.ACLXmlXsi,
+				},
+				Permission: string(grant.Permission),
+			}
+		}
+		s3Resp := &response_type.AWSACLResponse{
+			OwnerId: *resp.Owner.ID,
+			OwnerDisplayName: *resp.Owner.DisplayName,
+			AccessControlList: &response_type.AccessControlList{
+				Grants: grants,
+			},
+		}
+		output, _ := xml.MarshalIndent(s3Resp, "  ", "    ")
+		fmt.Printf("Response %s", resp)
+		writeLine(xmlHeader, &writer)
+		writeLine(string(output), &writer)
+		return
 	}
-	s3Resp := &AWSACLResponse{
-		OwnerId: *resp.Owner.ID,
-		OwnerDisplayName: *resp.Owner.DisplayName,
-		AccessControlList: &AccessControlList{
-			Grants: grants,
-		},
-	}
-	output, _ := xml.MarshalIndent(s3Resp, "  ", "    ")
-	fmt.Printf("Response %s", resp)
-	writeLine(xmlHeader, &writer)
-	writeLine(string(output), &writer)
-	return
 }
 
 func (handler S3Handler) S3PutFile(writer http.ResponseWriter, request *http.Request) {
@@ -359,7 +328,7 @@ func (handler S3Handler) S3List(writer http.ResponseWriter, request *http.Reques
 	listRequest := &s3.ListObjectsInput{Bucket: &bucket}
 	delim := request.URL.Query().Get("delimiter")
 	listRequest.Delimiter = &delim
-	if encodingType := request.URL.Query().Get("encoding-type"); encodingType == "url" {
+	if encodingType := request.URL.Query().Get("encoding-response_type"); encodingType == "url" {
 		listRequest.EncodingType = s3.EncodingTypeUrl
 	}
 	if maxKeys := request.URL.Query().Get("max-keys"); maxKeys != "" {
@@ -377,9 +346,9 @@ func (handler S3Handler) S3List(writer http.ResponseWriter, request *http.Reques
 	if respError != nil {
 		panic(fmt.Sprintf("Error %s", respError))
 	}
-	var contents = make([]*BucketContent, len(resp.Contents))
+	var contents = make([]*response_type.BucketContent, len(resp.Contents))
 	for i, content := range resp.Contents {
-		contents[i] = &BucketContent{
+		contents[i] = &response_type.BucketContent{
 			Key: *content.Key,
 			LastModified: content.LastModified.Format("2006-01-02T15:04:05.000Z"),
 			ETag: *content.ETag,
@@ -387,13 +356,13 @@ func (handler S3Handler) S3List(writer http.ResponseWriter, request *http.Reques
 			StorageClass: string(content.StorageClass),
 		}
 	}
-	var prefixes = make([]*BucketCommonPrefix, len(resp.CommonPrefixes))
+	var prefixes = make([]*response_type.BucketCommonPrefix, len(resp.CommonPrefixes))
 	for i, prefix := range resp.CommonPrefixes {
-		prefixes[i] = &BucketCommonPrefix{
+		prefixes[i] = &response_type.BucketCommonPrefix{
 			*prefix.Prefix,
 		}
 	}
-	s3Resp := &AWSListBucketResponse{
+	s3Resp := &response_type.AWSListBucketResponse{
 		XmlNS: "http://s3.amazonaws.com/doc/2006-03-01/",
 		Name: resp.Name,
 		Prefix: resp.Prefix,
