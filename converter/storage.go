@@ -2,8 +2,10 @@ package converter
 
 import (
 	"cloud.google.com/go/storage"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"sidecar/response_type"
+	"strconv"
 )
 
 func gcpPermissionToAWS(role storage.ACLRole) string {
@@ -14,6 +16,51 @@ func gcpPermissionToAWS(role storage.ACLRole) string {
 	} else {
 		return string(s3.PermissionWrite)
 	}
+}
+
+func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput) *response_type.AWSListBucketResponse {
+
+	contentI := 0
+	prefixI := 0
+	fmt.Printf("Remaining %d\n", input.PageInfo().Remaining())
+	fmt.Printf("MaxSize %d\n", input.PageInfo().MaxSize)
+	fmt.Printf("Token %s\n", input.PageInfo().Token)
+	var contents = make([]*response_type.BucketContent, int(*listRequest.MaxKeys))
+	var prefixes = make([]*response_type.BucketCommonPrefix, int(*listRequest.MaxKeys))
+	for item, err := input.Next() ;  err == nil; item, err = input.Next() {
+		lastModified := item.Updated
+		if item.Name != "" {
+			contents[contentI] = &response_type.BucketContent{
+				Key: item.Name,
+				LastModified: lastModified.Format("2006-01-02T15:04:05.000Z"),
+				ETag: strconv.FormatInt(int64(item.CRC32C), 10),
+				Size: item.Size,
+				StorageClass: item.StorageClass,
+			}
+			contentI++
+		} else {
+			prefixes[prefixI] = &response_type.BucketCommonPrefix{
+				Prefix: item.Prefix,
+			}
+			prefixI++
+		}
+	}
+	isTruncated := false
+	s3Resp := &response_type.AWSListBucketResponse{
+		XmlNS: "http://s3.amazonaws.com/doc/2006-03-01/",
+		Name: listRequest.Bucket,
+		Prefix: listRequest.Prefix,
+		Delimiter: nil,
+		KeyCount: int64(contentI + prefixI),
+		MaxKeys: listRequest.MaxKeys,
+		IsTruncated: &isTruncated,
+		Contents: contents,
+		CommonPrefixes: prefixes,
+	}
+	if listRequest.Delimiter != nil && *listRequest.Delimiter != "" {
+		s3Resp.Delimiter = listRequest.Delimiter
+	}
+	return s3Resp
 }
 
 func GCSACLResponseToAWS(input []storage.ACLRule) response_type.AWSACLResponse {

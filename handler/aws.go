@@ -324,7 +324,7 @@ func (handler S3Handler) S3HeadFile(writer http.ResponseWriter, request *http.Re
 func (handler S3Handler) S3List(writer http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	bucket := vars["bucket"]
-	fmt.Printf("Headers: %s", request.URL)
+	fmt.Printf("Headers: %s\n", request.URL)
 	listRequest := &s3.ListObjectsInput{Bucket: &bucket}
 	delim := request.URL.Query().Get("delimiter")
 	listRequest.Delimiter = &delim
@@ -334,52 +334,70 @@ func (handler S3Handler) S3List(writer http.ResponseWriter, request *http.Reques
 	if maxKeys := request.URL.Query().Get("max-keys"); maxKeys != "" {
 		maxKeyInt, _ := strconv.ParseInt(maxKeys, 10, 64)
 		listRequest.MaxKeys = &maxKeyInt
+	} else {
+		maxKeyInt := int64(1000)
+		listRequest.MaxKeys = &maxKeyInt
 	}
 	prefix := request.URL.Query().Get("prefix")
 	listRequest.Prefix = &prefix
 	if startAfter := request.URL.Query().Get("start-after"); startAfter != "" {
 		listRequest.Marker = &startAfter
 	}
-	fmt.Printf("Requesting %s", listRequest)
-	req := handler.S3Client.ListObjectsRequest(listRequest)
-	resp, respError := req.Send()
-	if respError != nil {
-		panic(fmt.Sprintf("Error %s", respError))
-	}
-	var contents = make([]*response_type.BucketContent, len(resp.Contents))
-	for i, content := range resp.Contents {
-		contents[i] = &response_type.BucketContent{
-			Key: *content.Key,
-			LastModified: content.LastModified.Format("2006-01-02T15:04:05.000Z"),
-			ETag: *content.ETag,
-			Size: *content.Size,
-			StorageClass: string(content.StorageClass),
+	if handler.GCPClient != nil {
+		bucketObject := handler.GCPClient.Bucket(bucket)
+		it := bucketObject.Objects(*handler.Context, &storage.Query{
+			Delimiter: *listRequest.Delimiter,
+			Prefix: *listRequest.Prefix,
+			Versions: false,
+		})
+		s3Resp := converter.GCSListResponseToAWS(it, listRequest)
+		output, _ := xml.MarshalIndent(s3Resp, "  ", "    ")
+		fmt.Printf("Response %s", output)
+		writeLine(xmlHeader, &writer)
+		writeLine(string(output), &writer)
+	} else {
+
+		fmt.Printf("Requesting %s", listRequest)
+		req := handler.S3Client.ListObjectsRequest(listRequest)
+		resp, respError := req.Send()
+		if respError != nil {
+			panic(fmt.Sprintf("Error %s", respError))
 		}
-	}
-	var prefixes = make([]*response_type.BucketCommonPrefix, len(resp.CommonPrefixes))
-	for i, prefix := range resp.CommonPrefixes {
-		prefixes[i] = &response_type.BucketCommonPrefix{
-			*prefix.Prefix,
+		var contents = make([]*response_type.BucketContent, len(resp.Contents))
+		for i, content := range resp.Contents {
+			contents[i] = &response_type.BucketContent{
+				Key: *content.Key,
+				LastModified: content.LastModified.Format("2006-01-02T15:04:05.000Z"),
+				ETag: *content.ETag,
+				Size: *content.Size,
+				StorageClass: string(content.StorageClass),
+			}
 		}
+		var prefixes = make([]*response_type.BucketCommonPrefix, len(resp.CommonPrefixes))
+		for i, prefix := range resp.CommonPrefixes {
+			prefixes[i] = &response_type.BucketCommonPrefix{
+				Prefix: *prefix.Prefix,
+			}
+		}
+		s3Resp := &response_type.AWSListBucketResponse{
+			XmlNS: "http://s3.amazonaws.com/doc/2006-03-01/",
+			Name: resp.Name,
+			Prefix: resp.Prefix,
+			Delimiter: nil,
+			Marker: resp.Marker,
+			KeyCount: int64(len(contents)),
+			MaxKeys: resp.MaxKeys,
+			IsTruncated: resp.IsTruncated,
+			Contents: contents,
+			CommonPrefixes: prefixes,
+		}
+		if resp.Delimiter != nil && *resp.Delimiter != "" {
+			s3Resp.Delimiter = resp.Delimiter
+		}
+		output, _ := xml.Marshal(s3Resp)
+		fmt.Printf("Response %s", resp)
+		writeLine(xmlHeader, &writer)
+		write(string(output), &writer)
+		return
 	}
-	s3Resp := &response_type.AWSListBucketResponse{
-		XmlNS: "http://s3.amazonaws.com/doc/2006-03-01/",
-		Name: resp.Name,
-		Prefix: resp.Prefix,
-		Delimiter: nil,
-		Marker: resp.Marker,
-		KeyCount: int64(len(contents)),
-		MaxKeys: resp.MaxKeys,
-		IsTruncated: resp.IsTruncated,
-		Contents: contents,
-		CommonPrefixes: prefixes,
-	}
-	if resp.Delimiter != nil && *resp.Delimiter != "" {
-		s3Resp.Delimiter = resp.Delimiter
-	}
-	output, _ := xml.Marshal(s3Resp)
-	fmt.Printf("Response %s", resp)
-	writeLine(xmlHeader, &writer)
-	write(string(output), &writer)
-	return
 }
