@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"sidecar/response_type"
-	"strconv"
 )
 
 func gcpPermissionToAWS(role storage.ACLRole) string {
@@ -29,11 +28,12 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	var prefixes = make([]*response_type.BucketCommonPrefix, int(*listRequest.MaxKeys))
 	for item, err := input.Next() ;  err == nil; item, err = input.Next() {
 		lastModified := item.Updated
+		fmt.Printf("Meta data %s", item)
 		if item.Name != "" {
 			contents[contentI] = &response_type.BucketContent{
 				Key: item.Name,
 				LastModified: lastModified.Format("2006-01-02T15:04:05.000Z"),
-				ETag: strconv.FormatInt(int64(item.CRC32C), 10),
+				ETag: fmt.Sprintf("%x", item.MD5[:]),
 				Size: item.Size,
 				StorageClass: item.StorageClass,
 			}
