@@ -42,6 +42,7 @@ type AWSListBucketResponse struct {
 	IsTruncated *bool `xml:"IsTruncated"`
 	Contents []*BucketContent `xml:"Contents"`
 	CommonPrefixes []*BucketCommonPrefix `xml:"CommonPrefixes,omitempty"`
+	ContinuationToken *string `xml:"ContinuationToken"`
 }
 
 type BucketContent struct {

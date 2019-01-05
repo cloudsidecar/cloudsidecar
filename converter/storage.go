@@ -26,9 +26,11 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	fmt.Printf("Token %s\n", input.PageInfo().Token)
 	var contents = make([]*response_type.BucketContent, int(*listRequest.MaxKeys))
 	var prefixes = make([]*response_type.BucketCommonPrefix, int(*listRequest.MaxKeys))
-	for item, err := input.Next() ;  err == nil; item, err = input.Next() {
+	for item, err := input.Next() ;  err == nil && input.PageInfo().Remaining() > 0; item, err = input.Next() {
 		lastModified := item.Updated
-		fmt.Printf("Meta data %s", item)
+		fmt.Printf("Token %s\n", input.PageInfo().Token)
+		fmt.Printf("Remaining %d\n", input.PageInfo().Remaining())
+		fmt.Printf("MaxSize %d\n", input.PageInfo().MaxSize)
 		if item.Name != "" {
 			contents[contentI] = &response_type.BucketContent{
 				Key: item.Name,
@@ -56,6 +58,7 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 		IsTruncated: &isTruncated,
 		Contents: contents,
 		CommonPrefixes: prefixes,
+		ContinuationToken: &input.PageInfo().Token,
 	}
 	if listRequest.Delimiter != nil && *listRequest.Delimiter != "" {
 		s3Resp.Delimiter = listRequest.Delimiter
