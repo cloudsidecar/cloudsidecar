@@ -43,6 +43,7 @@ type AWSListBucketResponse struct {
 	Contents []*BucketContent `xml:"Contents"`
 	CommonPrefixes []*BucketCommonPrefix `xml:"CommonPrefixes,omitempty"`
 	ContinuationToken *string `xml:"ContinuationToken"`
+	NextContinuationToken *string `xml:"NextContinuationToken"`
 }
 
 type BucketContent struct {

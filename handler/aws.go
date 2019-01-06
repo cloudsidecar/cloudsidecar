@@ -338,6 +338,9 @@ func (handler S3Handler) S3List(writer http.ResponseWriter, request *http.Reques
 		maxKeyInt := int64(1000)
 		listRequest.MaxKeys = &maxKeyInt
 	}
+	if continuationToken := request.URL.Query().Get("continuation-token"); continuationToken != "" {
+		listRequest.Marker = &continuationToken
+	}
 	prefix := request.URL.Query().Get("prefix")
 	listRequest.Prefix = &prefix
 	if startAfter := request.URL.Query().Get("start-after"); startAfter != "" {
@@ -390,6 +393,7 @@ func (handler S3Handler) S3List(writer http.ResponseWriter, request *http.Reques
 			IsTruncated: resp.IsTruncated,
 			Contents: contents,
 			CommonPrefixes: prefixes,
+			NextContinuationToken: resp.NextMarker,
 		}
 		if resp.Delimiter != nil && *resp.Delimiter != "" {
 			s3Resp.Delimiter = resp.Delimiter

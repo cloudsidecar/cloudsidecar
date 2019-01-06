@@ -4,6 +4,7 @@ import (
 	"cloud.google.com/go/storage"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"google.golang.org/api/iterator"
 	"sidecar/response_type"
 )
 
@@ -24,13 +25,20 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	fmt.Printf("Remaining %d\n", input.PageInfo().Remaining())
 	fmt.Printf("MaxSize %d\n", input.PageInfo().MaxSize)
 	fmt.Printf("Token %s\n", input.PageInfo().Token)
-	var contents = make([]*response_type.BucketContent, int(*listRequest.MaxKeys))
-	var prefixes = make([]*response_type.BucketCommonPrefix, int(*listRequest.MaxKeys))
-	for item, err := input.Next() ;  err == nil && input.PageInfo().Remaining() > 0; item, err = input.Next() {
+	fmt.Printf("Marker %s\n", listRequest.Marker)
+	var pageResponse []*storage.ObjectAttrs
+	var marker string
+	if listRequest.Marker != nil && *listRequest.Marker != "" {
+		marker = *listRequest.Marker
+	}
+	nextToken, err := iterator.NewPager(input, 1000, marker).NextPage(&pageResponse)
+	if err != nil{
+		panic(fmt.Sprintf("Boo %s", err))
+	}
+	var contents = make([]*response_type.BucketContent, len(pageResponse))
+	var prefixes = make([]*response_type.BucketCommonPrefix, len(pageResponse))
+	for _, item := range pageResponse {
 		lastModified := item.Updated
-		fmt.Printf("Token %s\n", input.PageInfo().Token)
-		fmt.Printf("Remaining %d\n", input.PageInfo().Remaining())
-		fmt.Printf("MaxSize %d\n", input.PageInfo().MaxSize)
 		if item.Name != "" {
 			contents[contentI] = &response_type.BucketContent{
 				Key: item.Name,
@@ -47,7 +55,7 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 			prefixI++
 		}
 	}
-	isTruncated := false
+	isTruncated := nextToken != ""
 	s3Resp := &response_type.AWSListBucketResponse{
 		XmlNS: "http://s3.amazonaws.com/doc/2006-03-01/",
 		Name: listRequest.Bucket,
@@ -58,7 +66,8 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 		IsTruncated: &isTruncated,
 		Contents: contents,
 		CommonPrefixes: prefixes,
-		ContinuationToken: &input.PageInfo().Token,
+		ContinuationToken: listRequest.Marker,
+		NextContinuationToken: &nextToken,
 	}
 	if listRequest.Delimiter != nil && *listRequest.Delimiter != "" {
 		s3Resp.Delimiter = listRequest.Delimiter
