@@ -242,39 +242,81 @@ func (handler S3Handler) S3GetFile(writer http.ResponseWriter, request *http.Req
 	if header := request.Header.Get("Range"); header != "" {
 		s3Req.Range = &header
 	}
-	req := handler.S3Client.GetObjectRequest(s3Req)
-	resp, respError := req.Send()
-	if respError != nil {
-		writer.WriteHeader(404)
-		fmt.Printf("Error %s", respError)
-		return
-	}
-	if header := resp.ServerSideEncryption; header != "" {
-		writer.Header().Set("ServerSideEncryption", string(header))
-	}
-	if header := resp.LastModified; header != nil {
-		lastMod := header.Format(time.RFC1123)
-		lastMod = strings.Replace(lastMod, "UTC", "GMT", 1)
-		writer.Header().Set("Last-Modified", lastMod)
-	}
-	if header := resp.ContentRange; header != nil {
-		writer.Header().Set("ContentRange", *header)
-	}
-	if header := resp.ETag; header != nil {
-		writer.Header().Set("ETag", *header)
-	}
-	if header := resp.ContentLength; header != nil {
-		writer.Header().Set("Content-Length", strconv.FormatInt(*header, 10))
-	}
-	defer resp.Body.Close()
-	buffer := make([]byte, 4096)
-	for {
-		n, err := resp.Body.Read(buffer)
-		if n > 0 {
-			writeBytes(buffer[:n], &writer)
+	if handler.GCPClient != nil {
+		objHandle := handler.GCPClient.Bucket(bucket).Object(key)
+		attrs, err := objHandle.Attrs(*handler.Context)
+		if err != nil {
+			writer.WriteHeader(404)
+			fmt.Printf("Error %s", err)
+			return
 		}
-		if err == io.EOF {
-			break
+		converter.GCSAttrToHeaders(attrs, writer)
+		var reader *storage.Reader
+		var readerError error
+		if s3Req.Range != nil {
+			equalSplit := strings.SplitN(*s3Req.Range, "=", 2)
+			byteSplit := strings.SplitN(equalSplit[1], "-", 2)
+			startByte, _ := strconv.ParseInt(byteSplit[0], 10, 64)
+			length := int64(-1)
+			if len(byteSplit) > 1 {
+				endByte, _ := strconv.ParseInt(byteSplit[1], 10, 64)
+				length = endByte - startByte
+			}
+			reader, readerError = objHandle.NewRangeReader(*handler.Context, startByte, length)
+		} else {
+			reader, readerError = objHandle.NewReader(*handler.Context)
+		}
+		if readerError != nil {
+			writer.WriteHeader(404)
+			fmt.Printf("Error %s", readerError)
+			return
+		}
+		defer reader.Close()
+		buffer := make([]byte, 4096)
+		for {
+			n, err := reader.Read(buffer)
+			if n > 0 {
+				writeBytes(buffer[:n], &writer)
+			}
+			if err == io.EOF {
+				break
+			}
+		}
+	} else {
+		req := handler.S3Client.GetObjectRequest(s3Req)
+		resp, respError := req.Send()
+		if respError != nil {
+			writer.WriteHeader(404)
+			fmt.Printf("Error %s", respError)
+			return
+		}
+		if header := resp.ServerSideEncryption; header != "" {
+			writer.Header().Set("ServerSideEncryption", string(header))
+		}
+		if header := resp.LastModified; header != nil {
+			lastMod := header.Format(time.RFC1123)
+			lastMod = strings.Replace(lastMod, "UTC", "GMT", 1)
+			writer.Header().Set("Last-Modified", lastMod)
+		}
+		if header := resp.ContentRange; header != nil {
+			writer.Header().Set("ContentRange", *header)
+		}
+		if header := resp.ETag; header != nil {
+			writer.Header().Set("ETag", *header)
+		}
+		if header := resp.ContentLength; header != nil {
+			writer.Header().Set("Content-Length", strconv.FormatInt(*header, 10))
+		}
+		defer resp.Body.Close()
+		buffer := make([]byte, 4096)
+		for {
+			n, err := resp.Body.Read(buffer)
+			if n > 0 {
+				writeBytes(buffer[:n], &writer)
+			}
+			if err == io.EOF {
+				break
+			}
 		}
 	}
 	return
@@ -286,36 +328,47 @@ func (handler S3Handler) S3HeadFile(writer http.ResponseWriter, request *http.Re
 	key := vars["key"]
 	fmt.Printf("Looking for %s %s\n", bucket, key)
 	fmt.Printf("URL %s\n", request.URL)
-	req := handler.S3Client.HeadObjectRequest(&s3.HeadObjectInput{Bucket: &bucket, Key: &key})
-	resp, respError := req.Send()
-	if respError != nil {
-		writer.WriteHeader(404)
-		fmt.Printf("Error %s", respError)
-		return
-	}
-	fmt.Printf("Response %s\n", resp.String())
-	if resp.AcceptRanges != nil {
-		writer.Header().Set("Accept-Ranges", *resp.AcceptRanges)
-	}
-	if resp.ContentLength != nil {
-		writer.Header().Set("Content-Length", strconv.FormatInt(*resp.ContentLength, 10))
-	}
-	if resp.ServerSideEncryption != "" {
-		writer.Header().Set("x-amz-server-side-encryption", string(resp.ServerSideEncryption))
-	}
-	if resp.CacheControl != nil {
-		writer.Header().Set("Cache-Control", *resp.CacheControl)
-	}
-	if resp.ContentType != nil {
-		writer.Header().Set("Content-Type", *resp.ContentType)
-	}
-	if resp.ETag != nil {
-		writer.Header().Set("ETag", *resp.ETag)
-	}
-	if resp.LastModified != nil {
-		lastMod := resp.LastModified.Format(time.RFC1123)
-		lastMod = strings.Replace(lastMod, "UTC", "GMT", 1)
-		writer.Header().Set("Last-Modified", lastMod)
+	if handler.GCPClient != nil {
+		resp, err := handler.GCPClient.Bucket(bucket).Object(key).Attrs(*handler.Context)
+		if err != nil {
+			writer.WriteHeader(404)
+			fmt.Printf("Error %s", err)
+			return
+		}
+		fmt.Printf("Response %s\n", *resp)
+		converter.GCSAttrToHeaders(resp, writer)
+	} else {
+		req := handler.S3Client.HeadObjectRequest(&s3.HeadObjectInput{Bucket: &bucket, Key: &key})
+		resp, respError := req.Send()
+		if respError != nil {
+			writer.WriteHeader(404)
+			fmt.Printf("Error %s", respError)
+			return
+		}
+		fmt.Printf("Response %s\n", resp.String())
+		if resp.AcceptRanges != nil {
+			writer.Header().Set("Accept-Ranges", *resp.AcceptRanges)
+		}
+		if resp.ContentLength != nil {
+			writer.Header().Set("Content-Length", strconv.FormatInt(*resp.ContentLength, 10))
+		}
+		if resp.ServerSideEncryption != "" {
+			writer.Header().Set("x-amz-server-side-encryption", string(resp.ServerSideEncryption))
+		}
+		if resp.CacheControl != nil {
+			writer.Header().Set("Cache-Control", *resp.CacheControl)
+		}
+		if resp.ContentType != nil {
+			writer.Header().Set("Content-Type", *resp.ContentType)
+		}
+		if resp.ETag != nil {
+			writer.Header().Set("ETag", *resp.ETag)
+		}
+		if resp.LastModified != nil {
+			lastMod := resp.LastModified.Format(time.RFC1123)
+			lastMod = strings.Replace(lastMod, "UTC", "GMT", 1)
+			writer.Header().Set("Last-Modified", lastMod)
+		}
 	}
 	writer.WriteHeader(200)
 	return

@@ -2,10 +2,15 @@ package converter
 
 import (
 	"cloud.google.com/go/storage"
+	"encoding/base64"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"google.golang.org/api/iterator"
+	"net/http"
 	"sidecar/response_type"
+	"strconv"
+	"strings"
+	"time"
 )
 
 func gcpPermissionToAWS(role storage.ACLRole) string {
@@ -40,10 +45,12 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	for _, item := range pageResponse {
 		lastModified := item.Updated
 		if item.Name != "" {
+			other := base64.StdEncoding.EncodeToString(item.MD5)
 			contents[contentI] = &response_type.BucketContent{
 				Key: item.Name,
 				LastModified: lastModified.Format("2006-01-02T15:04:05.000Z"),
-				ETag: fmt.Sprintf("%x", item.MD5[:]),
+				// ETag: fmt.Sprintf("%x", item.MD5[:]),
+				ETag: other,
 				Size: item.Size,
 				StorageClass: item.StorageClass,
 			}
@@ -73,6 +80,23 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 		s3Resp.Delimiter = listRequest.Delimiter
 	}
 	return s3Resp
+}
+
+func GCSAttrToHeaders(input *storage.ObjectAttrs, writer http.ResponseWriter) {
+	writer.Header().Set("Content-Length", strconv.FormatInt(input.Size, 10))
+	if input.CacheControl != "" {
+		writer.Header().Set("Cache-Control", input.CacheControl)
+	}
+	if input.ContentType != "" {
+		writer.Header().Set("Cache-Type", input.ContentType)
+	}
+	if len(input.MD5) > 0 {
+		other := base64.StdEncoding.EncodeToString(input.MD5)
+		writer.Header().Set("ETag", other)
+	}
+	lastMod := input.Updated.Format(time.RFC1123)
+	lastMod = strings.Replace(lastMod, "UTC", "GMT", 1)
+	writer.Header().Set("Last-Modified", lastMod)
 }
 
 func GCSACLResponseToAWS(input []storage.ACLRule) response_type.AWSACLResponse {
