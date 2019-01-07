@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
 	"google.golang.org/api/iterator"
+	"io"
 	"net/http"
 	"sidecar/response_type"
 	"strconv"
@@ -21,6 +23,29 @@ func gcpPermissionToAWS(role storage.ACLRole) string {
 	} else {
 		return string(s3.PermissionWrite)
 	}
+}
+
+func GCPUpload(input *s3manager.UploadInput, writer *storage.Writer) (int64, error) {
+	reader := input.Body
+	buffer := make([]byte, 4096)
+	var bytes int64
+	for {
+		n, err := reader.Read(buffer)
+		if n > 0 {
+			bytes += int64(n)
+			_, writeErr := writer.Write(buffer[:n])
+			if writeErr != nil {
+				return bytes, writeErr
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return bytes, err
+		}
+	}
+	return bytes, nil
 }
 
 func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput) *response_type.AWSListBucketResponse {

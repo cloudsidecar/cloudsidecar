@@ -185,7 +185,6 @@ func (handler S3Handler) S3PutFile(writer http.ResponseWriter, request *http.Req
 	s3Req := &s3manager.UploadInput{
 		Bucket: &bucket,
 		Key: &key,
-
 	}
 	if header := request.Header.Get("Content-MD5"); header != "" {
 		s3Req.ContentMD5 = &header
@@ -204,29 +203,31 @@ func (handler S3Handler) S3PutFile(writer http.ResponseWriter, request *http.Req
 		contentLength, _ = strconv.ParseInt(header, 10, 64)
 	}
 	defer request.Body.Close()
-	uploader := s3manager.NewUploaderWithClient(handler.S3Client)
 	var err error
 	if !isChunked {
-		_, err = uploader.Upload(&s3manager.UploadInput{
-			Bucket: &bucket,
-			Key: &key,
-			Body: request.Body,
-		})
+		s3Req.Body = request.Body
 	} else {
 		fmt.Printf("CHUNKED %d", contentLength)
 		readerWrapper := ChunkedReaderWrapper{
 			Reader:         &request.Body,
 			ContentLength:  &contentLength,
 		}
-		_, err = uploader.Upload(&s3manager.UploadInput{
-			Bucket: &bucket,
-			Key: &key,
-			Body: readerWrapper,
-		})
-
+		s3Req.Body = readerWrapper
 	}
-	if err != nil {
-		fmt.Printf("Error %s", err)
+	// wg := sync.WaitGroup{}
+	if handler.GCPClient != nil {
+		uploader := handler.GCPClient.Bucket(bucket).Object(key).NewWriter(*handler.Context)
+		defer uploader.Close()
+		_, err := converter.GCPUpload(s3Req, uploader)
+		if err != nil {
+			fmt.Printf("Error %s", err)
+		}
+	} else {
+		uploader := s3manager.NewUploaderWithClient(handler.S3Client)
+		_, err = uploader.Upload(s3Req)
+		if err != nil {
+			fmt.Printf("Error %s", err)
+		}
 	}
 	writer.WriteHeader(200)
 	fmt.Printf("DONE")
