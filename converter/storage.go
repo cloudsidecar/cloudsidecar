@@ -33,15 +33,19 @@ func GCPUpload(input *s3manager.UploadInput, writer *storage.Writer) (int64, err
 		n, err := reader.Read(buffer)
 		if n > 0 {
 			bytes += int64(n)
+			fmt.Println("Read bytes ", n)
 			_, writeErr := writer.Write(buffer[:n])
 			if writeErr != nil {
+				fmt.Println("Write error ", writeErr)
 				return bytes, writeErr
 			}
 		}
 		if err == io.EOF {
+			fmt.Println("EOF")
 			break
 		}
 		if err != nil {
+			fmt.Println("ERROR ", err)
 			return bytes, err
 		}
 	}
@@ -126,8 +130,10 @@ func GCSAttrToHeaders(input *storage.ObjectAttrs, writer http.ResponseWriter) {
 
 func GCSACLResponseToAWS(input []storage.ACLRule) response_type.AWSACLResponse {
 	response := response_type.AWSACLResponse{}
-	var grants = make([]*response_type.Grant, len(input))
-	for i, entry := range input {
+	// lets only do head
+	// var grants = make([]*response_type.Grant, len(input))
+	var grants = make([]*response_type.Grant, 1)
+	for i, entry := range input[:1] {
 		var displayName string
 		if entry.Email != "" {
 			displayName = entry.Email

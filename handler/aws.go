@@ -25,11 +25,11 @@ type S3Handler struct {
 
 
 type ChunkedReaderWrapper struct {
-	Reader         *io.ReadCloser
-	ContentLength  *int64
-	Buffer         *[]byte
-	ChunkPosition      int
-	ChunkSize      int
+	Reader            *io.ReadCloser
+	ContentLength     *int64
+	Buffer            []byte
+	ChunkNextPosition int
+	ChunkSize         int
 }
 
 func (wrapper ChunkedReaderWrapper) ReadHeaderGetChunkSize() (i int, err error) {
@@ -71,8 +71,9 @@ func (wrapper ChunkedReaderWrapper) ReadHeader() (s string, err error) {
 	}
 }
 
-func (wrapper ChunkedReaderWrapper) Read(p []byte) (n int, err error) {
-	if wrapper.Buffer == nil || len(*wrapper.Buffer) == 0 {
+func (wrapper *ChunkedReaderWrapper) Read(p []byte) (n int, err error) {
+	if wrapper.Buffer == nil || len(wrapper.Buffer) == 0 {
+		wrapper.ChunkNextPosition = 0
 		chunkSize, err := wrapper.ReadHeaderGetChunkSize()
 		fmt.Printf("Chunk size %d\n", chunkSize)
 		if err != nil {
@@ -84,22 +85,30 @@ func (wrapper ChunkedReaderWrapper) Read(p []byte) (n int, err error) {
 			return 0, io.EOF
 		}
 		buffer := make([]byte, chunkSize)
-		wrapper.Buffer = &buffer
+		wrapper.Buffer = buffer
 		_, err = io.ReadFull(*wrapper.Reader, buffer)
 		if err != nil {
 			fmt.Printf("Error reading all %s", err)
 			return 0, err
 		}
 	}
-	bytesLeft := len(*wrapper.Buffer)
+	// 0: wrapper.Buffer = 5, CNP = 0, bytesLeft = 5
+	// pSize = 2
+	// read [0, 2]
+	// 1: CNP = 2, bytesLeft = 3
+	// read [2, 4]
+	// 2: CNP = 4, bytesLeft = 1
+	bytesLeft := len(wrapper.Buffer) - wrapper.ChunkNextPosition
 	pSize := len(p)
 	if pSize <= bytesLeft {
-		copy(p, (*wrapper.Buffer)[:pSize])
-		newBuffer := (*wrapper.Buffer)[pSize:]
-		wrapper.Buffer = &newBuffer
+		nextPos := wrapper.ChunkNextPosition + pSize
+		copy(p, (wrapper.Buffer)[wrapper.ChunkNextPosition:nextPos])
+		wrapper.ChunkNextPosition = nextPos
+		fmt.Println("READO ", pSize, bytesLeft, len(wrapper.Buffer))
 		return pSize, nil
 	} else {
-		n := copy(p, *wrapper.Buffer)
+		fmt.Println("DONE READO ", pSize, bytesLeft, len(wrapper.Buffer))
+		n := copy(p, wrapper.Buffer[wrapper.ChunkNextPosition:])
 		wrapper.Buffer = nil
 		return n, nil
 	}
@@ -135,22 +144,24 @@ func writeLine(input string, writer *http.ResponseWriter) {
 func (handler S3Handler) S3ACL(writer http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	bucket := vars["bucket"]
-	req := handler.S3Client.GetBucketAclRequest(&s3.GetBucketAclInput{Bucket: &bucket})
-	resp, respError := req.Send()
-	if respError != nil {
-		panic(fmt.Sprintf("Error %s", respError))
-	}
 	if handler.GCPClient != nil {
 		acl := handler.GCPClient.Bucket(bucket).ACL()
 		aclList, err := acl.List(*handler.Context)
 		if err != nil {
-			panic(fmt.Sprintf("Error with GCP %s", err))
+			fmt.Printf("Error with GCP %s", err)
+			writer.WriteHeader(404)
+			return
 		}
 		output, _ := xml.MarshalIndent(converter.GCSACLResponseToAWS(aclList), "  ", "    ")
 		fmt.Printf("Response %s", aclList)
 		writeLine(xmlHeader, &writer)
 		writeLine(string(output), &writer)
 	} else {
+		req := handler.S3Client.GetBucketAclRequest(&s3.GetBucketAclInput{Bucket: &bucket})
+		resp, respError := req.Send()
+		if respError != nil {
+			panic(fmt.Sprintf("Error %s", respError))
+		}
 		var grants = make([]*response_type.Grant, len(resp.Grants))
 		for i, grant := range resp.Grants {
 			grants[i] = &response_type.Grant{
@@ -212,7 +223,7 @@ func (handler S3Handler) S3PutFile(writer http.ResponseWriter, request *http.Req
 			Reader:         &request.Body,
 			ContentLength:  &contentLength,
 		}
-		s3Req.Body = readerWrapper
+		s3Req.Body = &readerWrapper
 	}
 	// wg := sync.WaitGroup{}
 	if handler.GCPClient != nil {
@@ -220,7 +231,7 @@ func (handler S3Handler) S3PutFile(writer http.ResponseWriter, request *http.Req
 		defer uploader.Close()
 		_, err := converter.GCPUpload(s3Req, uploader)
 		if err != nil {
-			fmt.Printf("Error %s", err)
+			fmt.Printf("\nBOOO Error %s\n", err)
 		}
 	} else {
 		uploader := s3manager.NewUploaderWithClient(handler.S3Client)
@@ -261,7 +272,7 @@ func (handler S3Handler) S3GetFile(writer http.ResponseWriter, request *http.Req
 			length := int64(-1)
 			if len(byteSplit) > 1 {
 				endByte, _ := strconv.ParseInt(byteSplit[1], 10, 64)
-				length = endByte - startByte
+				length = endByte + 1 - startByte
 			}
 			reader, readerError = objHandle.NewRangeReader(*handler.Context, startByte, length)
 		} else {

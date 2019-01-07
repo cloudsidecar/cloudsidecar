@@ -27,7 +27,7 @@ type Grantee struct {
 	Id string `xml:"ID"`
 	DisplayName string `xml:"DisplayName"`
 	XmlNS string `xml:"xmlns:xsi,attr"`
-	Xsi string `xml:"xsi:response_type,attr"`
+	Xsi string `xml:"xsi:type,attr"`
 }
 
 type AWSListBucketResponse struct {
