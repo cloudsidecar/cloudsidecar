@@ -6,6 +6,31 @@ const (
 	ACLXmlXsi string = "CanonicalUser"
 )
 
+type KinesisRequest struct {
+	StreamName string
+	PartitionKey string
+	Data string
+	Records []KinesisRecordsRequest
+}
+
+type KinesisResponse struct {
+	SequenceNumber *string
+	ShardId *string
+	ErrorCode *string
+	ErrorMessage *string
+}
+
+type KinesisRecordsRequest struct {
+	PartitionKey string
+	Data string
+}
+
+type KinesisRecordsResponse struct {
+	FailedRequestCount int64
+	Records []KinesisResponse
+
+}
+
 type AWSACLResponse struct {
 	XMLName xml.Name `xml:"AccessControlPolicy"`
 	OwnerId string `xml:"Owner>ID"`

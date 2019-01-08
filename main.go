@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/defaults"
 	"github.com/aws/aws-sdk-go-v2/aws/endpoints"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/mux"
 	"google.golang.org/api/option"
@@ -37,24 +38,30 @@ func main() {
 		configs.Credentials = creds
 		//configs.EndpointResolver = aws.ResolveWithEndpointURL("http://localhost:9000")
 		configs.Region = endpoints.UsEast1RegionID
-		svc := s3.New(configs)
-		s3Handler := myhandler.S3Handler{S3Client: svc}
-		if awsConfig.DestinationGCPConfig != nil {
-			ctx := context.Background()
-			gcpClient, err := newGCPStorage(ctx, awsConfig.DestinationGCPConfig.KeyFileLocation)
-			if err != nil {
-				panic(fmt.Sprintln("Error setting up gcp client", err))
+		if awsConfig.ServiceType == "s3" {
+			svc := s3.New(configs)
+			s3Handler := myhandler.S3Handler{S3Client: svc}
+			if awsConfig.DestinationGCPConfig != nil {
+				ctx := context.Background()
+				gcpClient, err := newGCPStorage(ctx, awsConfig.DestinationGCPConfig.KeyFileLocation)
+				if err != nil {
+					panic(fmt.Sprintln("Error setting up gcp client", err))
+				}
+				s3Handler.GCPClient = gcpClient
+				s3Handler.Context = &ctx
 			}
-			s3Handler.GCPClient = gcpClient
-			s3Handler.Context = &ctx
+			r.HandleFunc("/{bucket}", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
+			r.HandleFunc("/{bucket}/", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
+			r.HandleFunc("/{bucket}", s3Handler.S3List).Methods("GET")
+			r.HandleFunc("/{bucket}/", s3Handler.S3List).Methods("GET")
+			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3HeadFile).Methods("HEAD")
+			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3GetFile).Methods("GET")
+			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3PutFile).Methods("PUT")
+		} else if awsConfig.ServiceType == "kinesis" {
+			svc := kinesis.New(configs)
+			kinesisHandler := myhandler.KinesisHandler{KinesisClient: svc}
+			r.HandleFunc("/", kinesisHandler.KinesisPublish).Methods("POST")
 		}
-		r.HandleFunc("/{bucket}", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
-		r.HandleFunc("/{bucket}/", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
-		r.HandleFunc("/{bucket}", s3Handler.S3List).Methods("GET")
-		r.HandleFunc("/{bucket}/", s3Handler.S3List).Methods("GET")
-		r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3HeadFile).Methods("HEAD")
-		r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3GetFile).Methods("GET")
-		r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3PutFile).Methods("PUT")
 		r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			fmt.Printf("Catch all %s %s %s", request.URL, request.Method, request.Header)
 			writer.WriteHeader(404)

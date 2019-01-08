@@ -3,8 +3,11 @@ package handler
 import (
 	"cloud.google.com/go/storage"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
 	"github.com/gorilla/mux"
@@ -23,6 +26,12 @@ type S3Handler struct {
 	Context *context.Context
 }
 
+type KinesisHandler struct {
+	KinesisClient *kinesis.Kinesis
+	GCPClient *storage.Client
+	Context *context.Context
+}
+
 
 type ChunkedReaderWrapper struct {
 	Reader            *io.ReadCloser
@@ -30,6 +39,84 @@ type ChunkedReaderWrapper struct {
 	Buffer            []byte
 	ChunkNextPosition int
 	ChunkSize         int
+}
+
+func (handler KinesisHandler) KinesisPublish(writer http.ResponseWriter, request *http.Request) {
+	decoder := json.NewDecoder(request.Body)
+	var payload response_type.KinesisRequest
+	var err error
+	err = decoder.Decode(&payload)
+	if err != nil {
+		fmt.Println("Error reading kinesis payload", err)
+	}
+	if payload.Data != "" {
+		str, _ := base64.StdEncoding.DecodeString(payload.Data)
+		req := handler.KinesisClient.PutRecordRequest(&kinesis.PutRecordInput{
+			Data: str,
+			PartitionKey: &payload.PartitionKey,
+			StreamName: &payload.StreamName,
+		})
+		output, err := req.Send()
+		if err != nil {
+			fmt.Println("Error sending", err)
+			writer.WriteHeader(500)
+			write(fmt.Sprint(err), &writer)
+			return
+		}
+		jsonOutput := response_type.KinesisResponse{
+			SequenceNumber: output.SequenceNumber,
+			ShardId: output.ShardId,
+		}
+		json.NewEncoder(writer).Encode(jsonOutput)
+		// write(output.String(), &writer)
+		fmt.Println("Single payload ", string(str))
+	} else if len(payload.Records) > 0 {
+		fmt.Println("Multiple records")
+		input := kinesis.PutRecordsInput{
+			StreamName: &payload.StreamName,
+			Records: make([]kinesis.PutRecordsRequestEntry, len(payload.Records)),
+		}
+		for i, record := range payload.Records {
+			str, _ := base64.StdEncoding.DecodeString(record.Data)
+			fmt.Println("Record ", string(str), " ", record.PartitionKey)
+			key := record.PartitionKey
+			input.Records[i] = kinesis.PutRecordsRequestEntry{
+				Data: str,
+				PartitionKey: &key,
+			}
+		}
+		fmt.Println("Records ", input.Records)
+		req := handler.KinesisClient.PutRecordsRequest(&input)
+		output, err := req.Send()
+		if err != nil {
+			fmt.Println("Error sending", err)
+			writer.WriteHeader(500)
+			write(fmt.Sprint(err), &writer)
+			return
+		}
+		jsonOutput := response_type.KinesisRecordsResponse{
+			FailedRequestCount: *output.FailedRecordCount,
+			Records: make([]response_type.KinesisResponse, len(output.Records)),
+		}
+		for i, record := range output.Records {
+			if record.ErrorCode != nil && *record.ErrorCode != "" {
+				jsonOutput.Records[i] = response_type.KinesisResponse{
+					ErrorCode:    record.ErrorCode,
+					ErrorMessage: record.ErrorMessage,
+				}
+			} else {
+				jsonOutput.Records[i] = response_type.KinesisResponse{
+					SequenceNumber: record.SequenceNumber,
+					ShardId: record.ShardId,
+				}
+			}
+		}
+		fmt.Println(output.Records)
+		json.NewEncoder(writer).Encode(jsonOutput)
+	} else {
+		fmt.Println("Missing data")
+		writer.WriteHeader(500)
+	}
 }
 
 func (wrapper ChunkedReaderWrapper) ReadHeaderGetChunkSize() (i int, err error) {
