@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 	"context"
 	"fmt"
@@ -25,6 +26,10 @@ type Handler interface {
 
 func newGCPStorage(ctx context.Context, keyFileLocation string) (*storage.Client, error) {
 	return storage.NewClient(ctx, option.WithCredentialsFile(keyFileLocation))
+}
+
+func newGCPPubSub(ctx context.Context, project string, keyFileLocation string) (*pubsub.Client, error) {
+	return pubsub.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
 }
 
 func main() {
@@ -60,6 +65,19 @@ func main() {
 		} else if awsConfig.ServiceType == "kinesis" {
 			svc := kinesis.New(configs)
 			kinesisHandler := myhandler.KinesisHandler{KinesisClient: svc}
+			if awsConfig.DestinationGCPConfig != nil {
+				ctx := context.Background()
+				gcpClient, err := newGCPPubSub(
+					ctx,
+					awsConfig.DestinationGCPConfig.Project,
+					awsConfig.DestinationGCPConfig.KeyFileLocation,
+				)
+				if err != nil {
+					panic(fmt.Sprintln("Error setting up gcp client", err))
+				}
+				kinesisHandler.GCPClient = gcpClient
+				kinesisHandler.Context = &ctx
+			}
 			r.HandleFunc("/", kinesisHandler.KinesisPublish).Methods("POST")
 		}
 		r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

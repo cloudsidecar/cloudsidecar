@@ -28,6 +28,7 @@ type AWSDestinationConfig struct {
 
 type GCPDestinationConfig struct {
 	Name string `name`
+	Project string `project`
 	KeyFileLocation string `key_file_location`
 }
 

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 	"context"
 	"encoding/base64"
@@ -17,6 +18,7 @@ import (
 	"sidecar/response_type"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -28,7 +30,7 @@ type S3Handler struct {
 
 type KinesisHandler struct {
 	KinesisClient *kinesis.Kinesis
-	GCPClient *storage.Client
+	GCPClient *pubsub.Client
 	Context *context.Context
 }
 
@@ -49,70 +51,136 @@ func (handler KinesisHandler) KinesisPublish(writer http.ResponseWriter, request
 	if err != nil {
 		fmt.Println("Error reading kinesis payload", err)
 	}
+	gcpShardId := "shard-0"
 	if payload.Data != "" {
 		str, _ := base64.StdEncoding.DecodeString(payload.Data)
-		req := handler.KinesisClient.PutRecordRequest(&kinesis.PutRecordInput{
-			Data: str,
-			PartitionKey: &payload.PartitionKey,
-			StreamName: &payload.StreamName,
-		})
-		output, err := req.Send()
-		if err != nil {
-			fmt.Println("Error sending", err)
-			writer.WriteHeader(500)
-			write(fmt.Sprint(err), &writer)
-			return
+		if handler.GCPClient != nil {
+			response, err := handler.GCPClient.Topic(payload.StreamName).Publish(*handler.Context, &pubsub.Message{
+				Data: str,
+			}).Get(*handler.Context)
+			if err != nil {
+				fmt.Println("Error sending", err)
+				writer.WriteHeader(500)
+				write(fmt.Sprint(err), &writer)
+				return
+			}
+			jsonOutput := response_type.KinesisResponse{
+				SequenceNumber: &response,
+				ShardId: &gcpShardId,
+			}
+			json.NewEncoder(writer).Encode(jsonOutput)
+			// write(output.String(), &writer)
+			fmt.Println("Single payload ", string(str))
+
+		} else {
+			req := handler.KinesisClient.PutRecordRequest(&kinesis.PutRecordInput{
+				Data: str,
+				PartitionKey: &payload.PartitionKey,
+				StreamName: &payload.StreamName,
+			})
+			output, err := req.Send()
+			if err != nil {
+				fmt.Println("Error sending", err)
+				writer.WriteHeader(500)
+				write(fmt.Sprint(err), &writer)
+				return
+			}
+			jsonOutput := response_type.KinesisResponse{
+				SequenceNumber: output.SequenceNumber,
+				ShardId: output.ShardId,
+			}
+			json.NewEncoder(writer).Encode(jsonOutput)
+			// write(output.String(), &writer)
+			fmt.Println("Single payload ", string(str))
 		}
-		jsonOutput := response_type.KinesisResponse{
-			SequenceNumber: output.SequenceNumber,
-			ShardId: output.ShardId,
-		}
-		json.NewEncoder(writer).Encode(jsonOutput)
-		// write(output.String(), &writer)
-		fmt.Println("Single payload ", string(str))
 	} else if len(payload.Records) > 0 {
 		fmt.Println("Multiple records")
-		input := kinesis.PutRecordsInput{
-			StreamName: &payload.StreamName,
-			Records: make([]kinesis.PutRecordsRequestEntry, len(payload.Records)),
-		}
-		for i, record := range payload.Records {
-			str, _ := base64.StdEncoding.DecodeString(record.Data)
-			fmt.Println("Record ", string(str), " ", record.PartitionKey)
-			key := record.PartitionKey
-			input.Records[i] = kinesis.PutRecordsRequestEntry{
-				Data: str,
-				PartitionKey: &key,
+		if handler.GCPClient != nil {
+			results := make([]*pubsub.PublishResult, len(payload.Records))
+			var wg sync.WaitGroup
+			wg.Add(len(payload.Records))
+			for i, record := range payload.Records {
+				str, _ := base64.StdEncoding.DecodeString(record.Data)
+				fmt.Println("Record ", string(str), " ", record.PartitionKey)
+				results[i] = handler.GCPClient.Topic(payload.StreamName).Publish(*handler.Context, &pubsub.Message{
+					Data: str,
+				})
+				go func (i int, c <-chan struct{}) {
+					<- c
+					wg.Done()
+				}(i, results[i].Ready())
 			}
-		}
-		fmt.Println("Records ", input.Records)
-		req := handler.KinesisClient.PutRecordsRequest(&input)
-		output, err := req.Send()
-		if err != nil {
-			fmt.Println("Error sending", err)
-			writer.WriteHeader(500)
-			write(fmt.Sprint(err), &writer)
-			return
-		}
-		jsonOutput := response_type.KinesisRecordsResponse{
-			FailedRequestCount: *output.FailedRecordCount,
-			Records: make([]response_type.KinesisResponse, len(output.Records)),
-		}
-		for i, record := range output.Records {
-			if record.ErrorCode != nil && *record.ErrorCode != "" {
-				jsonOutput.Records[i] = response_type.KinesisResponse{
-					ErrorCode:    record.ErrorCode,
-					ErrorMessage: record.ErrorMessage,
-				}
-			} else {
-				jsonOutput.Records[i] = response_type.KinesisResponse{
-					SequenceNumber: record.SequenceNumber,
-					ShardId: record.ShardId,
+			wg.Wait()
+			failedCount := int64(0)
+			records := make([]response_type.KinesisResponse, len(results))
+			for i, result := range results {
+				serverId, err := result.Get(*handler.Context)
+				if err != nil {
+					var errorCode = "ERROR"
+					var errorMessage = err.Error()
+					records[i] = response_type.KinesisResponse{
+						ErrorCode: &errorCode,
+						ErrorMessage: &errorMessage,
+					}
+					failedCount += 1
+				} else {
+					records[i] = response_type.KinesisResponse{
+						ShardId: &gcpShardId,
+						SequenceNumber: &serverId,
+					}
 				}
 			}
+			jsonOutput := response_type.KinesisRecordsResponse{
+				FailedRequestCount: failedCount,
+				Records: records,
+			}
+			fmt.Println(records)
+			json.NewEncoder(writer).Encode(jsonOutput)
+
+		} else {
+			input := kinesis.PutRecordsInput{
+				StreamName: &payload.StreamName,
+				Records: make([]kinesis.PutRecordsRequestEntry, len(payload.Records)),
+			}
+			for i, record := range payload.Records {
+				str, _ := base64.StdEncoding.DecodeString(record.Data)
+				fmt.Println("Record ", string(str), " ", record.PartitionKey)
+				key := record.PartitionKey
+				input.Records[i] = kinesis.PutRecordsRequestEntry{
+					Data: str,
+					PartitionKey: &key,
+				}
+			}
+			fmt.Println("Records ", input.Records)
+			req := handler.KinesisClient.PutRecordsRequest(&input)
+			output, err := req.Send()
+			if err != nil {
+				fmt.Println("Error sending", err)
+				writer.WriteHeader(500)
+				write(fmt.Sprint(err), &writer)
+				return
+			}
+			jsonOutput := response_type.KinesisRecordsResponse{
+				FailedRequestCount: *output.FailedRecordCount,
+				Records: make([]response_type.KinesisResponse, len(output.Records)),
+			}
+			for i, record := range output.Records {
+				if record.ErrorCode != nil && *record.ErrorCode != "" {
+					jsonOutput.Records[i] = response_type.KinesisResponse{
+						ErrorCode:    record.ErrorCode,
+						ErrorMessage: record.ErrorMessage,
+					}
+				} else {
+					jsonOutput.Records[i] = response_type.KinesisResponse{
+						SequenceNumber: record.SequenceNumber,
+						ShardId: record.ShardId,
+					}
+				}
+			}
+			fmt.Println(output.Records)
+			json.NewEncoder(writer).Encode(jsonOutput)
+
 		}
-		fmt.Println(output.Records)
-		json.NewEncoder(writer).Encode(jsonOutput)
 	} else {
 		fmt.Println("Missing data")
 		writer.WriteHeader(500)
