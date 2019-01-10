@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"cloud.google.com/go/bigtable"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 	"context"
@@ -8,6 +9,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
@@ -34,6 +36,11 @@ type KinesisHandler struct {
 	Context *context.Context
 }
 
+type DynamoDBHandler struct {
+	DynamoClient *dynamodb.DynamoDB
+	GCPClient *bigtable.Client
+	Context *context.Context
+}
 
 type ChunkedReaderWrapper struct {
 	Reader            *io.ReadCloser
@@ -41,6 +48,139 @@ type ChunkedReaderWrapper struct {
 	Buffer            []byte
 	ChunkNextPosition int
 	ChunkSize         int
+}
+
+func (handler DynamoDBHandler) DynamoOperation(writer http.ResponseWriter, request *http.Request) {
+	targetHeader := request.Header.Get("X-Amz-Target")
+	targetSplit := strings.SplitN(targetHeader, ".", 2)
+	targetFunction := strings.ToLower(targetSplit[1])
+	if targetFunction == "scan" {
+		handler.DynamoScan(writer, request)
+	} else if targetFunction == "getitem" {
+		handler.DynamoGetItem(writer, request)
+	} else if targetFunction == "query" {
+		handler.DynamoQuery(writer, request)
+	}
+}
+
+func (handler DynamoDBHandler) DynamoQuery(writer http.ResponseWriter, request *http.Request) {
+	decoder := json.NewDecoder(request.Body)
+	var input dynamodb.QueryInput
+	err := decoder.Decode(&input)
+	if err != nil {
+		writer.WriteHeader(400)
+		fmt.Println("Error with decoding input", err)
+		write(fmt.Sprint("Error decoding input ", err), &writer)
+		return
+	}
+	resp, err := handler.DynamoClient.QueryRequest(&input).Send()
+	if err != nil {
+		writer.WriteHeader(400)
+		fmt.Println("Error", err)
+		write(fmt.Sprint("Error", err), &writer)
+		return
+	}
+	fmt.Println(resp)
+	fmt.Println(input)
+	json.NewEncoder(writer).Encode(resp)
+
+}
+
+func (handler DynamoDBHandler) DynamoGetItem(writer http.ResponseWriter, request *http.Request) {
+	decoder := json.NewDecoder(request.Body)
+	var input dynamodb.GetItemInput
+	decodeErr := decoder.Decode(&input)
+	if decodeErr != nil {
+		writer.WriteHeader(400)
+		fmt.Println("Error with decoding input", decodeErr)
+		write(fmt.Sprint("Error decoding input ", decodeErr), &writer)
+		return
+	}
+	var resp *dynamodb.GetItemOutput
+	var err error
+	if handler.GCPClient != nil {
+		var columnName string
+		var columnValue string
+		for key, value := range input.Key {
+			columnName = key
+			if value.S != nil {
+				columnValue = *value.S
+			}
+			break
+		}
+		fmt.Println("Filtering on ", columnName, "=", columnValue)
+		// BS CODE
+		/*
+		muts := make([]*bigtable.Mutation, 2)
+		rowKeys := make([]string, 2)
+		muts[0] = bigtable.NewMutation()
+		muts[0].Set("a", "name", bigtable.Now(), []byte("larry"))
+		muts[0].Set("a", "age", bigtable.Now(), []byte("23"))
+		muts[1] = bigtable.NewMutation()
+		muts[1].Set("a", "name", bigtable.Now(), []byte("fart"))
+		muts[1].Set("a", "age", bigtable.Now(), []byte("50"))
+		rowKeys[0] = "boo"
+		rowKeys[1] = "larrykins"
+		errors, error := handler.GCPClient.Open(*input.TableName).ApplyBulk(*handler.Context, rowKeys, muts)
+		fmt.Println(errors)
+		fmt.Println(error)
+		*/
+		// BS DONE
+		row, err := handler.GCPClient.Open(*input.TableName).ReadRow(*handler.Context, columnValue)
+		if err != nil {
+			writer.WriteHeader(400)
+			fmt.Println("Error with decoding input", err)
+			write(fmt.Sprint("Error decoding input ", err), &writer)
+			return
+		}
+		var result = make(map[string]dynamodb.AttributeValue)
+		for _, values := range row {
+			for _, value := range values {
+				stringValue := string(value.Value)
+				result[value.Column] = dynamodb.AttributeValue{
+					S: &stringValue,
+				}
+			}
+		}
+		resp = &dynamodb.GetItemOutput{
+			Item: result,
+		}
+
+	} else {
+		resp, err = handler.DynamoClient.GetItemRequest(&input).Send()
+		if err != nil {
+			writer.WriteHeader(400)
+			fmt.Println("Error", err)
+			write(fmt.Sprint("Error", err), &writer)
+			return
+		}
+	}
+	fmt.Println(resp)
+	fmt.Println(input)
+	json.NewEncoder(writer).Encode(resp)
+}
+
+func (handler DynamoDBHandler) DynamoScan(writer http.ResponseWriter, request *http.Request) {
+	decoder := json.NewDecoder(request.Body)
+	var input dynamodb.ScanInput
+	err := decoder.Decode(&input)
+	if err != nil {
+		writer.WriteHeader(400)
+		fmt.Println("Error with decoding input", err)
+		write(fmt.Sprint("Error decoding input ", err), &writer)
+		return
+	}
+	resp, err := handler.DynamoClient.ScanRequest(&input).Send()
+	if err != nil {
+		writer.WriteHeader(400)
+		fmt.Println("Error", err)
+		write(fmt.Sprint("Error", err), &writer)
+		return
+	}
+	fmt.Println(resp)
+	fmt.Println(input)
+	json.NewEncoder(writer).Encode(resp)
+
 }
 
 func (handler KinesisHandler) KinesisPublish(writer http.ResponseWriter, request *http.Request) {
@@ -60,7 +200,7 @@ func (handler KinesisHandler) KinesisPublish(writer http.ResponseWriter, request
 			}).Get(*handler.Context)
 			if err != nil {
 				fmt.Println("Error sending", err)
-				writer.WriteHeader(500)
+				writer.WriteHeader(400)
 				write(fmt.Sprint(err), &writer)
 				return
 			}
@@ -81,7 +221,7 @@ func (handler KinesisHandler) KinesisPublish(writer http.ResponseWriter, request
 			output, err := req.Send()
 			if err != nil {
 				fmt.Println("Error sending", err)
-				writer.WriteHeader(500)
+				writer.WriteHeader(400)
 				write(fmt.Sprint(err), &writer)
 				return
 			}
@@ -156,7 +296,7 @@ func (handler KinesisHandler) KinesisPublish(writer http.ResponseWriter, request
 			output, err := req.Send()
 			if err != nil {
 				fmt.Println("Error sending", err)
-				writer.WriteHeader(500)
+				writer.WriteHeader(400)
 				write(fmt.Sprint(err), &writer)
 				return
 			}
@@ -183,7 +323,7 @@ func (handler KinesisHandler) KinesisPublish(writer http.ResponseWriter, request
 		}
 	} else {
 		fmt.Println("Missing data")
-		writer.WriteHeader(500)
+		writer.WriteHeader(400)
 	}
 }
 

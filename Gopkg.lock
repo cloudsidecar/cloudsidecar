@@ -2,15 +2,20 @@
 
 
 [[projects]]
-  digest = "1:fb44e55dc909f8e21ca4e8724f831753cc7d3185ba5defcdbf38de9b23091dea"
+  digest = "1:46f81a97b7e437861eb78a1d7f8de15528978e48595f15fd1a5d5243010f12eb"
   name = "cloud.google.com/go"
   packages = [
+    "bigtable",
+    "bigtable/internal/gax",
+    "bigtable/internal/option",
     "compute/metadata",
     "iam",
     "internal",
     "internal/optional",
     "internal/trace",
     "internal/version",
+    "longrunning",
+    "longrunning/autogen",
     "pubsub",
     "pubsub/apiv1",
     "pubsub/internal/distribution",
@@ -21,7 +26,7 @@
   version = "v0.34.0"
 
 [[projects]]
-  digest = "1:2e2bbebe9bb672e7c3187f8d1b4f7e99d3db116bfd830a5fdd4afe03abf82d86"
+  digest = "1:127304e6078157c789cb41226d3944135a692abbd07e1713c5e7e46cb4052ef6"
   name = "github.com/aws/aws-sdk-go-v2"
   packages = [
     "aws",
@@ -40,6 +45,7 @@
     "private/protocol/restxml",
     "private/protocol/xml",
     "private/protocol/xml/xmlutil",
+    "service/dynamodb",
     "service/kinesis",
     "service/s3",
     "service/s3/s3iface",
@@ -50,7 +56,7 @@
   version = "v0.6.0"
 
 [[projects]]
-  digest = "1:19e1717be26f549febea402e08b46db7919d164324a24ff67e0c81dfb11316b8"
+  digest = "1:82db3b76eba1b5f200b304fd5593770998f3e7362d09172c9632d14e952bb0d8"
   name = "github.com/golang/protobuf"
   packages = [
     "proto",
@@ -60,6 +66,7 @@
     "ptypes/duration",
     "ptypes/empty",
     "ptypes/timestamp",
+    "ptypes/wrappers",
   ]
   pruneopts = "UT"
   revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
@@ -198,9 +205,10 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:09b53f1be31931834fe6c2837693b7bffde7cdae1ea8723ae642b97a326b149f"
+  digest = "1:1b8989bd62da0e1969485cb5b163689c8eede0dff89f0c69d75c93f7af51fd90"
   name = "google.golang.org/api"
   packages = [
+    "cloudresourcemanager/v1",
     "gensupport",
     "googleapi",
     "googleapi/internal/uritemplates",
@@ -241,11 +249,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:de4d292024907a9b9cf2f419125150b60fca12f801a618d3a5a26e82859379d9"
+  digest = "1:978a98e93eeaef158dc5115d6efb31fdebd1fc9f2ee4e784d82c04a0636ab126"
   name = "google.golang.org/genproto"
   packages = [
     "googleapis/api/annotations",
+    "googleapis/bigtable/admin/v2",
+    "googleapis/bigtable/v2",
     "googleapis/iam/v1",
+    "googleapis/longrunning",
     "googleapis/pubsub/v1",
     "googleapis/rpc/code",
     "googleapis/rpc/status",
@@ -307,11 +318,13 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "cloud.google.com/go/bigtable",
     "cloud.google.com/go/pubsub",
     "cloud.google.com/go/storage",
     "github.com/aws/aws-sdk-go-v2/aws",
     "github.com/aws/aws-sdk-go-v2/aws/defaults",
     "github.com/aws/aws-sdk-go-v2/aws/endpoints",
+    "github.com/aws/aws-sdk-go-v2/service/dynamodb",
     "github.com/aws/aws-sdk-go-v2/service/kinesis",
     "github.com/aws/aws-sdk-go-v2/service/s3",
     "github.com/aws/aws-sdk-go-v2/service/s3/s3manager",

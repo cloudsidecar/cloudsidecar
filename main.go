@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cloud.google.com/go/bigtable"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 	"context"
@@ -8,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/defaults"
 	"github.com/aws/aws-sdk-go-v2/aws/endpoints"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/mux"
@@ -30,6 +32,10 @@ func newGCPStorage(ctx context.Context, keyFileLocation string) (*storage.Client
 
 func newGCPPubSub(ctx context.Context, project string, keyFileLocation string) (*pubsub.Client, error) {
 	return pubsub.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
+}
+
+func newGCPBigTable(ctx context.Context, project string, instance string, keyFileLocation string) (*bigtable.Client, error) {
+	return bigtable.NewClient(ctx, project, instance, option.WithCredentialsFile(keyFileLocation))
 }
 
 func main() {
@@ -79,6 +85,24 @@ func main() {
 				kinesisHandler.Context = &ctx
 			}
 			r.HandleFunc("/", kinesisHandler.KinesisPublish).Methods("POST")
+		} else if awsConfig.ServiceType == "dynamodb" {
+			svc := dynamodb.New(configs)
+			dynamodbHandler := myhandler.DynamoDBHandler{DynamoClient: svc}
+			if awsConfig.DestinationGCPConfig != nil {
+				ctx := context.Background()
+				gcpClient, err := newGCPBigTable(
+					ctx,
+					awsConfig.DestinationGCPConfig.Project,
+					awsConfig.DestinationGCPConfig.Instance,
+					awsConfig.DestinationGCPConfig.KeyFileLocation,
+				)
+				if err != nil {
+					panic(fmt.Sprintln("Error setting up gcp client", err))
+				}
+				dynamodbHandler.GCPClient = gcpClient
+				dynamodbHandler.Context = &ctx
+			}
+			r.HandleFunc("/", dynamodbHandler.DynamoOperation).Methods("POST")
 		}
 		r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			fmt.Printf("Catch all %s %s %s", request.URL, request.Method, request.Header)
