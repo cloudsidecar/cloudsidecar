@@ -1,10 +1,45 @@
 package response_type
 
-import "encoding/xml"
+import (
+	"cloud.google.com/go/datastore"
+	"encoding/xml"
+)
 const (
 	ACLXmlNs string = "http://www.w3.org/2001/XMLSchema-instance"
 	ACLXmlXsi string = "CanonicalUser"
 )
+
+type Map map[string]interface{}
+
+func (m Map) Load(c []datastore.Property) error {
+	for _, p := range c {
+		/*if p.Multiple {
+			value := reflect.ValueOf(m[p.Name])
+			if value.Kind() != reflect.Slice {
+				m[p.Name] = []interface{}{p.Value}
+			} else {
+				m[p.Name] = append(m[p.Name].([]interface{}), p.Value)
+			}
+		} else {
+			m[p.Name] = p.Value
+		}*/
+		m[p.Name] = p.Value
+	}
+	return nil
+}
+
+func (m Map) Save() ([]datastore.Property, error) {
+	props := make([]datastore.Property, len(m))
+	i := 0
+	for k, v := range m {
+		props[i] = datastore.Property {
+			Name: k,
+			Value: v,
+		}
+		i++
+	}
+	return props, nil
+}
 
 type KinesisRequest struct {
 	StreamName string

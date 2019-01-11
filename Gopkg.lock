@@ -2,15 +2,17 @@
 
 
 [[projects]]
-  digest = "1:46f81a97b7e437861eb78a1d7f8de15528978e48595f15fd1a5d5243010f12eb"
+  digest = "1:778785ceeeb8c81c57bbf8478b1aa14e114a84bd44e9f8b9d6039ac519e6df2c"
   name = "cloud.google.com/go"
   packages = [
     "bigtable",
     "bigtable/internal/gax",
     "bigtable/internal/option",
     "compute/metadata",
+    "datastore",
     "iam",
     "internal",
+    "internal/fields",
     "internal/optional",
     "internal/trace",
     "internal/version",
@@ -56,7 +58,7 @@
   version = "v0.6.0"
 
 [[projects]]
-  digest = "1:82db3b76eba1b5f200b304fd5593770998f3e7362d09172c9632d14e952bb0d8"
+  digest = "1:72856926f8208767b837bf51e3373f49139f61889b67dc7fd3c2a0fd711e3f7a"
   name = "github.com/golang/protobuf"
   packages = [
     "proto",
@@ -65,6 +67,7 @@
     "ptypes/any",
     "ptypes/duration",
     "ptypes/empty",
+    "ptypes/struct",
     "ptypes/timestamp",
     "ptypes/wrappers",
   ]
@@ -249,17 +252,19 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:978a98e93eeaef158dc5115d6efb31fdebd1fc9f2ee4e784d82c04a0636ab126"
+  digest = "1:5bf8f1f22554bfe8a42fb53fbaeb90f8b3cd5622fd3e5a2a639b3f8ee2f4d47c"
   name = "google.golang.org/genproto"
   packages = [
     "googleapis/api/annotations",
     "googleapis/bigtable/admin/v2",
     "googleapis/bigtable/v2",
+    "googleapis/datastore/v1",
     "googleapis/iam/v1",
     "googleapis/longrunning",
     "googleapis/pubsub/v1",
     "googleapis/rpc/code",
     "googleapis/rpc/status",
+    "googleapis/type/latlng",
     "protobuf/field_mask",
   ]
   pruneopts = "UT"
@@ -319,6 +324,7 @@
   analyzer-version = 1
   input-imports = [
     "cloud.google.com/go/bigtable",
+    "cloud.google.com/go/datastore",
     "cloud.google.com/go/pubsub",
     "cloud.google.com/go/storage",
     "github.com/aws/aws-sdk-go-v2/aws",

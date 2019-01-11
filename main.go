@@ -2,6 +2,7 @@ package main
 
 import (
 	"cloud.google.com/go/bigtable"
+	"cloud.google.com/go/datastore"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 	"context"
@@ -36,6 +37,10 @@ func newGCPPubSub(ctx context.Context, project string, keyFileLocation string) (
 
 func newGCPBigTable(ctx context.Context, project string, instance string, keyFileLocation string) (*bigtable.Client, error) {
 	return bigtable.NewClient(ctx, project, instance, option.WithCredentialsFile(keyFileLocation))
+}
+
+func newGCPDatastore(ctx context.Context, project string, keyFileLocation string) (*datastore.Client, error) {
+	return datastore.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
 }
 
 func main() {
@@ -90,16 +95,29 @@ func main() {
 			dynamodbHandler := myhandler.DynamoDBHandler{DynamoClient: svc}
 			if awsConfig.DestinationGCPConfig != nil {
 				ctx := context.Background()
-				gcpClient, err := newGCPBigTable(
-					ctx,
-					awsConfig.DestinationGCPConfig.Project,
-					awsConfig.DestinationGCPConfig.Instance,
-					awsConfig.DestinationGCPConfig.KeyFileLocation,
-				)
-				if err != nil {
-					panic(fmt.Sprintln("Error setting up gcp client", err))
+				if awsConfig.DestinationGCPConfig.IsBigTable{
+					gcpClient, err := newGCPBigTable(
+						ctx,
+						awsConfig.DestinationGCPConfig.Project,
+						awsConfig.DestinationGCPConfig.Instance,
+						awsConfig.DestinationGCPConfig.KeyFileLocation,
+					)
+					if err != nil {
+						panic(fmt.Sprintln("Error setting up gcp client", err))
+					}
+					dynamodbHandler.GCPBigTableClient = gcpClient
+				} else {
+					gcpClient, err := newGCPDatastore(
+						ctx,
+						awsConfig.DestinationGCPConfig.Project,
+						awsConfig.DestinationGCPConfig.KeyFileLocation,
+					)
+					if err != nil {
+						panic(fmt.Sprintln("Error setting up gcp client", err))
+					}
+					dynamodbHandler.GCPDatastoreClient = gcpClient
+
 				}
-				dynamodbHandler.GCPClient = gcpClient
 				dynamodbHandler.Context = &ctx
 			}
 			r.HandleFunc("/", dynamodbHandler.DynamoOperation).Methods("POST")

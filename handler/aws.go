@@ -2,6 +2,7 @@ package handler
 
 import (
 	"cloud.google.com/go/bigtable"
+	"cloud.google.com/go/datastore"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 	"context"
@@ -37,9 +38,10 @@ type KinesisHandler struct {
 }
 
 type DynamoDBHandler struct {
-	DynamoClient *dynamodb.DynamoDB
-	GCPClient *bigtable.Client
-	Context *context.Context
+	DynamoClient      *dynamodb.DynamoDB
+	GCPBigTableClient *bigtable.Client
+	GCPDatastoreClient *datastore.Client
+	Context           *context.Context
 }
 
 type ChunkedReaderWrapper struct {
@@ -98,17 +100,7 @@ func (handler DynamoDBHandler) DynamoGetItem(writer http.ResponseWriter, request
 	}
 	var resp *dynamodb.GetItemOutput
 	var err error
-	if handler.GCPClient != nil {
-		var columnName string
-		var columnValue string
-		for key, value := range input.Key {
-			columnName = key
-			if value.S != nil {
-				columnValue = *value.S
-			}
-			break
-		}
-		fmt.Println("Filtering on ", columnName, "=", columnValue)
+	if handler.GCPBigTableClient != nil {
 		// BS CODE
 		/*
 		muts := make([]*bigtable.Mutation, 2)
@@ -121,31 +113,40 @@ func (handler DynamoDBHandler) DynamoGetItem(writer http.ResponseWriter, request
 		muts[1].Set("a", "age", bigtable.Now(), []byte("50"))
 		rowKeys[0] = "boo"
 		rowKeys[1] = "larrykins"
-		errors, error := handler.GCPClient.Open(*input.TableName).ApplyBulk(*handler.Context, rowKeys, muts)
+		errors, error := handler.GCPBigTableClient.Open(*input.TableName).ApplyBulk(*handler.Context, rowKeys, muts)
 		fmt.Println(errors)
 		fmt.Println(error)
 		*/
 		// BS DONE
-		row, err := handler.GCPClient.Open(*input.TableName).ReadRow(*handler.Context, columnValue)
+		columnValue, err := converter.GCPBigTableGetById(&input)
+		row, err := handler.GCPBigTableClient.Open(*input.TableName).ReadRow(*handler.Context, columnValue)
 		if err != nil {
 			writer.WriteHeader(400)
 			fmt.Println("Error with decoding input", err)
 			write(fmt.Sprint("Error decoding input ", err), &writer)
 			return
 		}
-		var result = make(map[string]dynamodb.AttributeValue)
-		for _, values := range row {
-			for _, value := range values {
-				stringValue := string(value.Value)
-				result[value.Column] = dynamodb.AttributeValue{
-					S: &stringValue,
-				}
-			}
+		resp, err = converter.GCPBigTableResponseToAWS(&row)
+	} else if handler.GCPDatastoreClient != nil {
+		columnValue, _ := converter.GCPBigTableGetById(&input)
+		result := make(response_type.Map)
+		key := datastore.Key{
+			Kind: *input.TableName,
+			Name: columnValue,
 		}
-		resp = &dynamodb.GetItemOutput{
-			Item: result,
+		fmt.Println("KEY ", key, " RESULT ", result == nil)
+		err := handler.GCPDatastoreClient.Get(
+			*handler.Context,
+			&key,
+			result,
+		)
+		if err != nil {
+			writer.WriteHeader(400)
+			fmt.Println("Error getting", err)
+			write(fmt.Sprint("Error getting", err), &writer)
+			return
 		}
-
+		resp, err = converter.GCPDatastoreMapToAWS(result)
 	} else {
 		resp, err = handler.DynamoClient.GetItemRequest(&input).Send()
 		if err != nil {

@@ -30,6 +30,7 @@ type GCPDestinationConfig struct {
 	Name string `name`
 	Project string `project`
 	Instance string `instance`
+	IsBigTable bool `is_bigtable`
 	KeyFileLocation string `key_file_location`
 }
 
