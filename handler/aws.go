@@ -171,12 +171,35 @@ func (handler DynamoDBHandler) DynamoScan(writer http.ResponseWriter, request *h
 		write(fmt.Sprint("Error decoding input ", err), &writer)
 		return
 	}
-	resp, err := handler.DynamoClient.ScanRequest(&input).Send()
-	if err != nil {
-		writer.WriteHeader(400)
-		fmt.Println("Error", err)
-		write(fmt.Sprint("Error", err), &writer)
-		return
+	var resp *dynamodb.ScanOutput
+	if handler.GCPDatastoreClient != nil {
+		query, _ := converter.AWSToGCPDatastoreQuery(&input)
+		fmt.Println(query)
+		var items []response_type.Map
+		keys, err := handler.GCPDatastoreClient.GetAll(*handler.Context, query, &items)
+		fmt.Println(keys, err)
+		length := int64(len(keys))
+		responseItems := make([]map[string]dynamodb.AttributeValue, length)
+		for i, item := range items {
+			responseItems[i] = make(map[string]dynamodb.AttributeValue)
+			for fieldName, field := range item {
+				responseItems[i][fieldName] = converter.ValueToAWS(field)
+				responseItems[i]["name"] = converter.ValueToAWS(keys[i].Name)
+			}
+		}
+		resp = &dynamodb.ScanOutput{
+			Count: &length,
+			Items: responseItems,
+		}
+
+	} else {
+		resp, err = handler.DynamoClient.ScanRequest(&input).Send()
+		if err != nil {
+			writer.WriteHeader(400)
+			fmt.Println("Error", err)
+			write(fmt.Sprint("Error", err), &writer)
+			return
+		}
 	}
 	fmt.Println(resp)
 	fmt.Println(input)
