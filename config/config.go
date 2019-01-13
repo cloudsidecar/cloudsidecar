@@ -31,7 +31,12 @@ type GCPDestinationConfig struct {
 	Project string `project`
 	Instance string `instance`
 	IsBigTable bool `is_bigtable`
+	DatastoreConfig *GCPDatastoreConfig `datastore_config`
 	KeyFileLocation string `key_file_location`
+}
+
+type GCPDatastoreConfig struct {
+	TableKeyNameMap map[string]string `table_key_map`
 }
 
 type GCPConfig struct {

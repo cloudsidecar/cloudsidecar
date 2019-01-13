@@ -106,7 +106,7 @@ func main() {
 						panic(fmt.Sprintln("Error setting up gcp client", err))
 					}
 					dynamodbHandler.GCPBigTableClient = gcpClient
-				} else {
+				} else if awsConfig.DestinationGCPConfig.DatastoreConfig != nil {
 					gcpClient, err := newGCPDatastore(
 						ctx,
 						awsConfig.DestinationGCPConfig.Project,
@@ -116,6 +116,7 @@ func main() {
 						panic(fmt.Sprintln("Error setting up gcp client", err))
 					}
 					dynamodbHandler.GCPDatastoreClient = gcpClient
+					dynamodbHandler.GCPDatastoreConfig = awsConfig.DestinationGCPConfig.DatastoreConfig
 
 				}
 				dynamodbHandler.Context = &ctx

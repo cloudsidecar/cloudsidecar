@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/mux"
 	"io"
 	"net/http"
+	"sidecar/config"
 	"sidecar/converter"
 	"sidecar/response_type"
 	"strconv"
@@ -42,6 +43,7 @@ type DynamoDBHandler struct {
 	GCPBigTableClient *bigtable.Client
 	GCPDatastoreClient *datastore.Client
 	Context           *context.Context
+	GCPDatastoreConfig *config.GCPDatastoreConfig
 }
 
 type ChunkedReaderWrapper struct {
@@ -75,7 +77,33 @@ func (handler DynamoDBHandler) DynamoQuery(writer http.ResponseWriter, request *
 		write(fmt.Sprint("Error decoding input ", err), &writer)
 		return
 	}
-	resp, err := handler.DynamoClient.QueryRequest(&input).Send()
+	var resp *dynamodb.QueryOutput
+	if handler.GCPDatastoreClient != nil {
+		query, _ := converter.AWSQueryToGCPDatastoreQuery(&input)
+		fmt.Println(query)
+		var items []response_type.Map
+		keys, err := handler.GCPDatastoreClient.GetAll(*handler.Context, query, &items)
+		fmt.Println(err)
+		fmt.Println(keys)
+		length := int64(len(keys))
+		responseItems := make([]map[string]dynamodb.AttributeValue, length)
+		fmt.Println(handler.GCPDatastoreConfig.TableKeyNameMap)
+		keyFieldName := handler.GCPDatastoreConfig.TableKeyNameMap[*input.TableName]
+		for i, item := range items {
+			responseItems[i] = make(map[string]dynamodb.AttributeValue)
+			for fieldName, field := range item {
+				responseItems[i][fieldName] = converter.ValueToAWS(field)
+				responseItems[i][keyFieldName] = converter.ValueToAWS(keys[i].Name)
+			}
+		}
+		resp = &dynamodb.QueryOutput{
+			Count: &length,
+			Items: responseItems,
+		}
+
+	} else {
+		resp, err = handler.DynamoClient.QueryRequest(&input).Send()
+	}
 	if err != nil {
 		writer.WriteHeader(400)
 		fmt.Println("Error", err)
@@ -173,18 +201,19 @@ func (handler DynamoDBHandler) DynamoScan(writer http.ResponseWriter, request *h
 	}
 	var resp *dynamodb.ScanOutput
 	if handler.GCPDatastoreClient != nil {
-		query, _ := converter.AWSToGCPDatastoreQuery(&input)
+		query, _ := converter.AWSScanToGCPDatastoreQuery(&input)
 		fmt.Println(query)
 		var items []response_type.Map
 		keys, err := handler.GCPDatastoreClient.GetAll(*handler.Context, query, &items)
 		fmt.Println(keys, err)
 		length := int64(len(keys))
 		responseItems := make([]map[string]dynamodb.AttributeValue, length)
+		keyFieldName := handler.GCPDatastoreConfig.TableKeyNameMap[*input.TableName]
 		for i, item := range items {
 			responseItems[i] = make(map[string]dynamodb.AttributeValue)
 			for fieldName, field := range item {
 				responseItems[i][fieldName] = converter.ValueToAWS(field)
-				responseItems[i]["name"] = converter.ValueToAWS(keys[i].Name)
+				responseItems[i][keyFieldName] = converter.ValueToAWS(keys[i].Name)
 			}
 		}
 		resp = &dynamodb.ScanOutput{
