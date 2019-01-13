@@ -31,7 +31,7 @@ func awsAttirbuteToValue(value dynamodb.AttributeValue) interface {} {
 	} else if len(value.B) > 0 {
 		queryValue = value.B
 	} else if value.N != nil {
-		queryValue = *value.N
+		queryValue, _ = strconv.ParseFloat(*value.N, 64)
 	} else if value.BOOL != nil {
 		queryValue = *value.BOOL
 	}
@@ -50,25 +50,48 @@ func AWSQueryToGCPDatastoreQuery(input *dynamodb.QueryInput) (*datastore.Query, 
 		query = query.Filter("__key__ = ", key)
 	}
 	if input.FilterExpression != nil {
-		queryString := *input.FilterExpression
-		if input.ExpressionAttributeNames != nil {
-			for key, value := range input.ExpressionAttributeNames {
-				queryString = strings.Replace(queryString, key, value, -1)
-			}
+		if input.FilterExpression != nil {
+			query, _ = handleFilterExpression(query, *input.FilterExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues)
 		}
-		var queryValue interface{}
-		if input.ExpressionAttributeValues != nil {
-			for key, value := range input.ExpressionAttributeValues {
-				if strings.Contains(queryString, key){
-					queryString = strings.Replace(queryString, key, "", -1)
+	}
+	return query, nil
+}
+
+func handleFilterExpression(
+	query *datastore.Query,
+	filterExpression string,
+	attributeNames map[string]string,
+	attributeValues map[string]dynamodb.AttributeValue) (*datastore.Query, error){
+	queryString := filterExpression
+	if strings.Index(queryString, "(") != -1 {
+		queryString = queryString[1:len(queryString) - 1]
+	}
+	if attributeNames != nil {
+		for key, value := range attributeNames {
+			queryString = strings.Replace(queryString, key, value, -1)
+		}
+	}
+	var queryValue interface{}
+	queryPieces := strings.Split(queryString, " AND ")
+	queryValues := make([]interface{}, len(queryPieces))
+	if attributeValues != nil {
+		for i, queryPiece := range queryPieces {
+			fmt.Println(queryString, "BOO", queryPiece)
+			for key, value := range attributeValues {
+				if strings.Contains(queryPiece, key) {
+					queryPiece = strings.Replace(queryPiece, key, "", -1)
+					queryPieces[i] = queryPiece
 					queryValue = awsAttirbuteToValue(value)
+					queryValues[i] = queryValue
 				}
 			}
 		}
-		queryString = strings.Trim(queryString, " ")
-		query = query.Filter(queryString, queryValue)
 	}
-	return query, nil
+	newQuery := query
+	for i, queryPiece := range queryPieces {
+		newQuery = newQuery.Filter(queryPiece, queryValues[i])
+	}
+	return newQuery, nil
 }
 
 func AWSScanToGCPDatastoreQuery(input *dynamodb.ScanInput) (*datastore.Query, error) {
@@ -77,23 +100,7 @@ func AWSScanToGCPDatastoreQuery(input *dynamodb.ScanInput) (*datastore.Query, er
 		query = query.Limit(int(*input.Limit))
 	}
 	if input.FilterExpression != nil {
-		queryString := *input.FilterExpression
-		if input.ExpressionAttributeNames != nil {
-			for key, value := range input.ExpressionAttributeNames {
-				queryString = strings.Replace(queryString, key, value, -1)
-			}
-		}
-		var queryValue interface{}
-		if input.ExpressionAttributeValues != nil {
-			for key, value := range input.ExpressionAttributeValues {
-				if strings.Contains(queryString, key){
-					queryString = strings.Replace(queryString, key, "", -1)
-					queryValue = awsAttirbuteToValue(value)
-				}
-			}
-		}
-		queryString = strings.Trim(queryString, " ")
-		query = query.Filter(queryString, queryValue)
+		query, _ = handleFilterExpression(query, *input.FilterExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues)
 	}
 	return query, nil
 }
