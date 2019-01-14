@@ -67,6 +67,15 @@ func (handler DynamoDBHandler) DynamoOperation(writer http.ResponseWriter, reque
 	}
 }
 
+func contains(list []interface {}, item interface {}) bool {
+	for _, arrItem := range list {
+		if arrItem == item {
+			return true
+		}
+	}
+	return false
+}
+
 func (handler DynamoDBHandler) DynamoQuery(writer http.ResponseWriter, request *http.Request) {
 	decoder := json.NewDecoder(request.Body)
 	var input dynamodb.QueryInput
@@ -79,7 +88,7 @@ func (handler DynamoDBHandler) DynamoQuery(writer http.ResponseWriter, request *
 	}
 	var resp *dynamodb.QueryOutput
 	if handler.GCPDatastoreClient != nil {
-		query, _ := converter.AWSQueryToGCPDatastoreQuery(&input)
+		query, inFilters, _ := converter.AWSQueryToGCPDatastoreQuery(&input)
 		fmt.Println(query)
 		var items []response_type.Map
 		keys, err := handler.GCPDatastoreClient.GetAll(*handler.Context, query, &items)
@@ -89,12 +98,31 @@ func (handler DynamoDBHandler) DynamoQuery(writer http.ResponseWriter, request *
 		responseItems := make([]map[string]dynamodb.AttributeValue, length)
 		fmt.Println(handler.GCPDatastoreConfig.TableKeyNameMap)
 		keyFieldName := handler.GCPDatastoreConfig.TableKeyNameMap[*input.TableName]
+		filteredItems := make([]response_type.Map, 0)
+		for i, item := range items {
+			for filterKey, filterValues := range inFilters {
+				if filterKey != keyFieldName {
+					if contains(filterValues, item[filterKey]) {
+						filteredItems = append(filteredItems, item)
+					}
+				} else {
+					if contains(filterValues, keys[i].Name){
+
+						filteredItems = append(filteredItems, item)
+					}
+				}
+			}
+		}
+		if len(inFilters) != 0 {
+			fmt.Println("BOOOYA")
+			items = filteredItems
+		}
 		for i, item := range items {
 			responseItems[i] = make(map[string]dynamodb.AttributeValue)
 			for fieldName, field := range item {
 				responseItems[i][fieldName] = converter.ValueToAWS(field)
-				responseItems[i][keyFieldName] = converter.ValueToAWS(keys[i].Name)
 			}
+			responseItems[i][keyFieldName] = converter.ValueToAWS(keys[i].Name)
 		}
 		resp = &dynamodb.QueryOutput{
 			Count: &length,
@@ -201,7 +229,7 @@ func (handler DynamoDBHandler) DynamoScan(writer http.ResponseWriter, request *h
 	}
 	var resp *dynamodb.ScanOutput
 	if handler.GCPDatastoreClient != nil {
-		query, _ := converter.AWSScanToGCPDatastoreQuery(&input)
+		query, inFilters, _ := converter.AWSScanToGCPDatastoreQuery(&input)
 		fmt.Println(query)
 		var items []response_type.Map
 		keys, err := handler.GCPDatastoreClient.GetAll(*handler.Context, query, &items)
@@ -209,6 +237,34 @@ func (handler DynamoDBHandler) DynamoScan(writer http.ResponseWriter, request *h
 		length := int64(len(keys))
 		responseItems := make([]map[string]dynamodb.AttributeValue, length)
 		keyFieldName := handler.GCPDatastoreConfig.TableKeyNameMap[*input.TableName]
+		filteredItems := make([]response_type.Map, 0)
+		filteredKeys := make([]*datastore.Key, 0)
+		for i, item := range items {
+			matchCount := 0
+			for filterKey, filterValues := range inFilters {
+				fmt.Println("Filter key", filterKey)
+				if filterKey != keyFieldName {
+					if contains(filterValues, item[filterKey]) {
+						matchCount ++
+					}
+				} else {
+					fmt.Println("in filter on key")
+					if contains(filterValues, keys[i].Name){
+						matchCount ++
+					}
+				}
+			}
+			if matchCount == len(inFilters) {
+				filteredItems = append(filteredItems, item)
+				filteredKeys = append(filteredKeys, keys[i])
+
+			}
+		}
+		if len(inFilters) != 0 {
+			items = filteredItems
+			responseItems = make([]map[string]dynamodb.AttributeValue, len(items))
+			keys = filteredKeys
+		}
 		for i, item := range items {
 			responseItems[i] = make(map[string]dynamodb.AttributeValue)
 			for fieldName, field := range item {
