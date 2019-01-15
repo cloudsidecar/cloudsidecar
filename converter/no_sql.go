@@ -59,6 +59,12 @@ func AWSQueryToGCPDatastoreQuery(input *dynamodb.QueryInput) (*datastore.Query, 
 	return query, inFilters, err
 }
 
+func removeParens(queryPiece string) string {
+	queryPiece = strings.Replace(queryPiece, "(", "", -1)
+	queryPiece = strings.Replace(queryPiece, ")", "", -1)
+	return queryPiece
+}
+
 func handleFilterExpression(
 	query *datastore.Query,
 	filterExpression string,
@@ -82,7 +88,7 @@ func handleFilterExpression(
 			fmt.Println(queryString, "BOO", queryPiece)
 			if strings.Contains(queryPiece, " IN ") {
 				filterPieces := strings.SplitN(queryPiece, " IN ", 2)
-				variableName := strings.Trim(filterPieces[0], " ")
+				variableName := removeParens(strings.Trim(filterPieces[0], " "))
 				inClause := filterPieces[1][1:len(filterPieces[1]) - 1]
 				inPieces := strings.Split(inClause, ",")
 				inFilters[variableName] = make([]interface {}, len(inPieces))
@@ -112,8 +118,7 @@ func handleFilterExpression(
 	newQuery := query
 	for i, queryPiece := range queryPieces {
 		if len(queryPiece) != 0 {
-			queryPiece = strings.Replace(queryPiece, "(", "", -1)
-			queryPiece = strings.Replace(queryPiece, ")", "", -1)
+			queryPiece = removeParens(queryPiece)
 			newQuery = newQuery.Filter(queryPiece, queryValues[i])
 		}
 	}
@@ -152,6 +157,16 @@ func ValueToAWS(value interface{}) dynamodb.AttributeValue {
 	if ok {
 		return dynamodb.AttributeValue{
 			BOOL: &boolValue,
+		}
+	}
+	mapValue, ok := value.(response_type.Map)
+	if ok {
+		attributeMap := make(map[string]dynamodb.AttributeValue)
+		for k, v := range mapValue {
+			attributeMap[k] = ValueToAWS(v)
+		}
+		return dynamodb.AttributeValue{
+			M: attributeMap,
 		}
 	}
 	stringValue := fmt.Sprint(value)

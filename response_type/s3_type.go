@@ -3,6 +3,8 @@ package response_type
 import (
 	"cloud.google.com/go/datastore"
 	"encoding/xml"
+	"fmt"
+	"reflect"
 )
 const (
 	ACLXmlNs string = "http://www.w3.org/2001/XMLSchema-instance"
@@ -11,8 +13,21 @@ const (
 
 type Map map[string]interface{}
 
+
 func (m Map) Load(c []datastore.Property) error {
 	for _, p := range c {
+		if reflect.ValueOf(p.Value).Kind() == reflect.Ptr {
+			ptr := p.Value.(* datastore.Entity)
+			deref := *ptr
+			fmt.Println(deref)
+			mapValue := make(Map)
+			for _, prop := range deref.Properties{
+				mapValue[prop.Name] = prop.Value
+			}
+			m[p.Name] = mapValue
+		} else{
+			m[p.Name] = p.Value
+		}
 		/*if p.Multiple {
 			value := reflect.ValueOf(m[p.Name])
 			if value.Kind() != reflect.Slice {
@@ -23,7 +38,6 @@ func (m Map) Load(c []datastore.Property) error {
 		} else {
 			m[p.Name] = p.Value
 		}*/
-		m[p.Name] = p.Value
 	}
 	return nil
 }

@@ -124,6 +124,7 @@ func (handler DynamoDBHandler) DynamoQuery(writer http.ResponseWriter, request *
 			}
 			responseItems[i][keyFieldName] = converter.ValueToAWS(keys[i].Name)
 		}
+		length = int64(len(items))
 		resp = &dynamodb.QueryOutput{
 			Count: &length,
 			Items: responseItems,
@@ -244,6 +245,7 @@ func (handler DynamoDBHandler) DynamoScan(writer http.ResponseWriter, request *h
 			for filterKey, filterValues := range inFilters {
 				fmt.Println("Filter key", filterKey)
 				if filterKey != keyFieldName {
+					fmt.Println("in filter not on key")
 					if contains(filterValues, item[filterKey]) {
 						matchCount ++
 					}
@@ -272,6 +274,7 @@ func (handler DynamoDBHandler) DynamoScan(writer http.ResponseWriter, request *h
 				responseItems[i][keyFieldName] = converter.ValueToAWS(keys[i].Name)
 			}
 		}
+		length = int64(len(items))
 		resp = &dynamodb.ScanOutput{
 			Count: &length,
 			Items: responseItems,
