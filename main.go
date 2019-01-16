@@ -58,6 +58,9 @@ func main() {
 			svc := s3.New(configs)
 			s3Handler := myhandler.S3Handler{S3Client: svc}
 			if awsConfig.DestinationGCPConfig != nil {
+				if awsConfig.DestinationGCPConfig.GCSConfig != nil {
+					s3Handler.GCSConfig = awsConfig.DestinationGCPConfig.GCSConfig
+				}
 				ctx := context.Background()
 				gcpClient, err := newGCPStorage(ctx, awsConfig.DestinationGCPConfig.KeyFileLocation)
 				if err != nil {

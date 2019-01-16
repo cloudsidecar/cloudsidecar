@@ -30,6 +30,7 @@ type S3Handler struct {
 	S3Client *s3.S3
 	GCPClient *storage.Client
 	Context *context.Context
+	GCSConfig *config.GCSConfig
 }
 
 type KinesisHandler struct {
@@ -548,10 +549,20 @@ func writeLine(input string, writer *http.ResponseWriter) {
 	}
 }
 
+func (handler S3Handler) bucketRename(bucket string) string {
+	if handler.GCSConfig != nil {
+		if val, ok := handler.GCSConfig.BucketRename[bucket]; ok {
+			return val
+		}
+	}
+	return bucket
+}
+
 func (handler S3Handler) S3ACL(writer http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	bucket := vars["bucket"]
 	if handler.GCPClient != nil {
+		bucket = handler.bucketRename(bucket)
 		acl := handler.GCPClient.Bucket(bucket).ACL()
 		aclList, err := acl.List(*handler.Context)
 		if err != nil {
@@ -634,6 +645,7 @@ func (handler S3Handler) S3PutFile(writer http.ResponseWriter, request *http.Req
 	}
 	// wg := sync.WaitGroup{}
 	if handler.GCPClient != nil {
+		bucket = handler.bucketRename(bucket)
 		uploader := handler.GCPClient.Bucket(bucket).Object(key).NewWriter(*handler.Context)
 		defer uploader.Close()
 		_, err := converter.GCPUpload(s3Req, uploader)
@@ -662,6 +674,7 @@ func (handler S3Handler) S3GetFile(writer http.ResponseWriter, request *http.Req
 		s3Req.Range = &header
 	}
 	if handler.GCPClient != nil {
+		bucket = handler.bucketRename(bucket)
 		objHandle := handler.GCPClient.Bucket(bucket).Object(key)
 		attrs, err := objHandle.Attrs(*handler.Context)
 		if err != nil {
@@ -748,6 +761,7 @@ func (handler S3Handler) S3HeadFile(writer http.ResponseWriter, request *http.Re
 	fmt.Printf("Looking for %s %s\n", bucket, key)
 	fmt.Printf("URL %s\n", request.URL)
 	if handler.GCPClient != nil {
+		bucket = handler.bucketRename(bucket)
 		resp, err := handler.GCPClient.Bucket(bucket).Object(key).Attrs(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
@@ -819,6 +833,7 @@ func (handler S3Handler) S3List(writer http.ResponseWriter, request *http.Reques
 		listRequest.Marker = &startAfter
 	}
 	if handler.GCPClient != nil {
+		bucket = handler.bucketRename(bucket)
 		bucketObject := handler.GCPClient.Bucket(bucket)
 		it := bucketObject.Objects(*handler.Context, &storage.Query{
 			Delimiter: *listRequest.Delimiter,
