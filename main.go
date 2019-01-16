@@ -13,7 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/mux"
+	"github.com/spf13/viper"
 	"google.golang.org/api/option"
 	"log"
 	"net/http"
@@ -43,9 +45,30 @@ func newGCPDatastore(ctx context.Context, project string, keyFileLocation string
 	return datastore.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
 }
 
+func loadConfig(config *conf.Config) {
+	err := viper.Unmarshal(config)
+	if err != nil {
+		panic(fmt.Sprint("Cannot load config", os.Args[1]))
+	}
+}
+
 func main() {
-	config := conf.FromFile(os.Args[1])
-	fmt.Println("hi ", config)
+	// config := conf.FromFile(os.Args[1])
+	var config conf.Config
+	viper.SetConfigFile(os.Args[1])
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic(fmt.Sprint("Cannot load config", os.Args[1]))
+	}
+	viper.WatchConfig()
+	viper.OnConfigChange(func(e fsnotify.Event) {
+		fmt.Println("Config file changed:", e.Name)
+		loadConfig(&config)
+		suv := viper.Sub("aws_configs.s3_test.gcp_destination_config")
+		fmt.Println(suv.GetStringMapString("gcs_config.bucket_rename"))
+	})
+	loadConfig(&config)
+	fmt.Println("Hi", config)
 	for _, awsConfig := range config.AwsConfigs  {
 		port := awsConfig.Port
 		r := mux.NewRouter()

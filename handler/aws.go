@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
 	"github.com/gorilla/mux"
+	"github.com/spf13/viper"
 	"io"
 	"net/http"
 	"sidecar/config"
@@ -30,7 +31,7 @@ type S3Handler struct {
 	S3Client *s3.S3
 	GCPClient *storage.Client
 	Context *context.Context
-	GCSConfig *config.GCSConfig
+	GCSConfig *viper.Viper
 }
 
 type KinesisHandler struct {
@@ -551,6 +552,7 @@ func writeLine(input string, writer *http.ResponseWriter) {
 
 func (handler S3Handler) bucketRename(bucket string) string {
 	if handler.GCSConfig != nil {
+		mappy := handler.GCSConfig.GetStringMapString("")
 		if val, ok := handler.GCSConfig.BucketRename[bucket]; ok {
 			return val
 		}
