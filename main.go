@@ -98,10 +98,10 @@ func main() {
 			}
 			bucketHandler := &bucket.Handler{Handler: handler}
 			bucketHandlers[key] = bucketHandler
-			r.HandleFunc("/{bucket}", bucketHandler.Handle).Methods("GET")
-			r.HandleFunc("/{bucket}", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
-			r.HandleFunc("/{bucket}/", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
-			r.HandleFunc("/{bucket}/", s3Handler.S3List).Methods("GET")
+			r.HandleFunc("/{bucket}", bucketHandler.ListHandle).Methods("GET")
+			r.HandleFunc("/{bucket}", bucketHandler.S3ACL).Queries("acl", "").Methods("GET")
+			r.HandleFunc("/{bucket}/", bucketHandler.S3ACL).Queries("acl", "").Methods("GET")
+			r.HandleFunc("/{bucket}/", bucketHandler.ListHandle).Methods("GET")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3HeadFile).Methods("HEAD")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3GetFile).Methods("GET")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3PutFile).Methods("PUT")

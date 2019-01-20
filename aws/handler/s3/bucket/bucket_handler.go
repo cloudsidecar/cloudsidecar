@@ -23,10 +23,13 @@ type Handler struct {
 }
 
 
-type ListObjectsHandler interface {
-	Handle(writer http.ResponseWriter, request *http.Request)
-	ParseInput(r *http.Request) (*s3.ListObjectsInput, error)
+type Bucket interface {
+	ListHandle(writer http.ResponseWriter, request *http.Request)
+	ListParseInput(r *http.Request) (*s3.ListObjectsInput, error)
+	ACLHandle(writer http.ResponseWriter, request *http.Request)
+	ACLParseInput(r *http.Request) (*s3.ListObjectsInput, error)
 }
+
 
 func (wrapper *Handler) bucketRename(bucket string) string {
 	fmt.Println(wrapper, wrapper.Config)
@@ -39,7 +42,7 @@ func (wrapper *Handler) bucketRename(bucket string) string {
 	return bucket
 }
 
-func (wrapper Handler) ParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
+func (wrapper Handler) ListParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
 	vars := mux.Vars(request)
 	bucket := vars["bucket"]
 	fmt.Printf("Headers: %s\n", request.URL)
@@ -67,8 +70,8 @@ func (wrapper Handler) ParseInput(request *http.Request) (*s3.ListObjectsInput, 
 	return listRequest, nil
 }
 
-func (wrapper *Handler) Handle(writer http.ResponseWriter, request *http.Request) {
-	input, err := wrapper.ParseInput(request)
+func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Request) {
+	input, err := wrapper.ListParseInput(request)
 	if err != nil {
 		writer.WriteHeader(400)
 		writer.Write([]byte(fmt.Sprint(err)))
@@ -132,3 +135,51 @@ func (wrapper *Handler) Handle(writer http.ResponseWriter, request *http.Request
 	writer.Write([]byte(string(output)))
 }
 
+
+func (wrapper *Handler) S3ACL(writer http.ResponseWriter, request *http.Request) {
+	vars := mux.Vars(request)
+	bucket := vars["bucket"]
+	if wrapper.GCPClient != nil {
+		bucket = wrapper.bucketRename(bucket)
+		acl := wrapper.GCPClient.Bucket(bucket).ACL()
+		aclList, err := acl.List(*wrapper.Context)
+		if err != nil {
+			fmt.Printf("Error with GCP %s", err)
+			writer.WriteHeader(404)
+			return
+		}
+		output, _ := xml.MarshalIndent(converter.GCSACLResponseToAWS(aclList), "  ", "    ")
+		fmt.Printf("Response %s", aclList)
+		writer.Write([]byte(s3_handler.XmlHeader))
+		writer.Write([]byte(string(output)))
+	} else {
+		req := wrapper.S3Client.GetBucketAclRequest(&s3.GetBucketAclInput{Bucket: &bucket})
+		resp, respError := req.Send()
+		if respError != nil {
+			panic(fmt.Sprintf("Error %s", respError))
+		}
+		var grants = make([]*response_type.Grant, len(resp.Grants))
+		for i, grant := range resp.Grants {
+			grants[i] = &response_type.Grant{
+				Grantee: &response_type.Grantee{
+					Id: *grant.Grantee.ID,
+					DisplayName: *grant.Grantee.DisplayName,
+					XmlNS: response_type.ACLXmlNs,
+					Xsi: response_type.ACLXmlXsi,
+				},
+				Permission: string(grant.Permission),
+			}
+		}
+		s3Resp := &response_type.AWSACLResponse{
+			OwnerId: *resp.Owner.ID,
+			OwnerDisplayName: *resp.Owner.DisplayName,
+			AccessControlList: &response_type.AccessControlList{
+				Grants: grants,
+			},
+		}
+		output, _ := xml.MarshalIndent(s3Resp, "  ", "    ")
+		fmt.Printf("Response %s", resp)
+		writer.Write([]byte(s3_handler.XmlHeader))
+		writer.Write([]byte(string(output)))
+	}
+}
