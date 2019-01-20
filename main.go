@@ -20,11 +20,13 @@ import (
 	"log"
 	"net/http"
 	"os"
-	s3_handler "sidecar/aws/handler"
+	aws_handler "sidecar/aws/handler"
+	dynamo_handler "sidecar/aws/handler/dynamo"
+	kinesis_handler "sidecar/aws/handler/kinesis"
+	s3_handler "sidecar/aws/handler/s3"
 	"sidecar/aws/handler/s3/bucket"
 	"sidecar/aws/handler/s3/object"
 	conf "sidecar/config"
-	myhandler "sidecar/handler"
 	"time"
 )
 
@@ -57,7 +59,7 @@ func loadConfig(config *conf.Config) {
 
 func main() {
 	var config conf.Config
-	s3Handlers := make(map[string]s3_handler.HandlerInterface)
+	awsHandlers := make(map[string]aws_handler.HandlerInterface)
 	viper.SetConfigFile(os.Args[1])
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -67,7 +69,7 @@ func main() {
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		fmt.Println("Config file changed:", e.Name)
 		loadConfig(&config)
-		for key, handler := range s3Handlers {
+		for key, handler := range awsHandlers {
 			handler.SetConfig(viper.Sub(fmt.Sprint("aws_configs.", key)))
 			fmt.Println("Setting config", handler.GetConfig())
 		}
@@ -99,7 +101,7 @@ func main() {
 			}
 			bucketHandler := bucket.New(&handler)
 			objectHandler := object.New(&handler)
-			s3Handlers[key] = &handler
+			awsHandlers[key] = &handler
 			r.HandleFunc("/{bucket}", bucketHandler.ACLHandle).Queries("acl", "").Methods("GET")
 			r.HandleFunc("/{bucket}/", bucketHandler.ACLHandle).Queries("acl", "").Methods("GET")
 			r.HandleFunc("/{bucket}", bucketHandler.ListHandle).Methods("GET")
@@ -109,7 +111,10 @@ func main() {
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.PutHandle).Methods("PUT")
 		} else if awsConfig.ServiceType == "kinesis" {
 			svc := kinesis.New(configs)
-			kinesisHandler := myhandler.KinesisHandler{KinesisClient: svc}
+			handler := kinesis_handler.Handler{
+				KinesisClient: svc,
+				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
+			}
 			if awsConfig.DestinationGCPConfig != nil {
 				ctx := context.Background()
 				gcpClient, err := newGCPPubSub(
@@ -120,13 +125,18 @@ func main() {
 				if err != nil {
 					panic(fmt.Sprintln("Error setting up gcp client", err))
 				}
-				kinesisHandler.GCPClient = gcpClient
-				kinesisHandler.Context = &ctx
+				handler.GCPClient = gcpClient
+				handler.Context = &ctx
 			}
-			r.HandleFunc("/", kinesisHandler.KinesisPublish).Methods("POST")
-		} else if awsConfig.ServiceType == "dynamodb" {
+			awsHandlers[key] = &handler
+			kinesisHandler := kinesis_handler.New(&handler)
+			r.HandleFunc("/", kinesisHandler.PublishHandle).Methods("POST")
+		} else if awsConfig.ServiceType == "dynamo" {
 			svc := dynamodb.New(configs)
-			dynamodbHandler := myhandler.DynamoDBHandler{DynamoClient: svc}
+			handler := dynamo_handler.Handler{
+				DynamoClient: svc,
+				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
+			}
 			if awsConfig.DestinationGCPConfig != nil {
 				ctx := context.Background()
 				if awsConfig.DestinationGCPConfig.IsBigTable{
@@ -139,7 +149,7 @@ func main() {
 					if err != nil {
 						panic(fmt.Sprintln("Error setting up gcp client", err))
 					}
-					dynamodbHandler.GCPBigTableClient = gcpClient
+					handler.GCPBigTableClient = gcpClient
 				} else if awsConfig.DestinationGCPConfig.DatastoreConfig != nil {
 					gcpClient, err := newGCPDatastore(
 						ctx,
@@ -149,13 +159,13 @@ func main() {
 					if err != nil {
 						panic(fmt.Sprintln("Error setting up gcp client", err))
 					}
-					dynamodbHandler.GCPDatastoreClient = gcpClient
-					dynamodbHandler.GCPDatastoreConfig = awsConfig.DestinationGCPConfig.DatastoreConfig
-
+					handler.GCPDatastoreClient = gcpClient
 				}
-				dynamodbHandler.Context = &ctx
+				handler.Context = &ctx
 			}
-			r.HandleFunc("/", dynamodbHandler.DynamoOperation).Methods("POST")
+			awsHandlers[key] = &handler
+			dynamoHandler := dynamo_handler.New(&handler)
+			r.HandleFunc("/", dynamoHandler.Handle).Methods("POST")
 		}
 		r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			fmt.Printf("Catch all %s %s %s", request.URL, request.Method, request.Header)

@@ -7,7 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/mux"
 	"net/http"
-	s3_handler "sidecar/aws/handler"
+	s3_handler "sidecar/aws/handler/s3"
 	"sidecar/converter"
 	"sidecar/response_type"
 	"strconv"
@@ -27,7 +27,7 @@ type Bucket interface {
 	ListParseInput(r *http.Request) (*s3.ListObjectsInput, error)
 	ACLHandle(writer http.ResponseWriter, request *http.Request)
 	ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, error)
-	New(s3Handler *s3_handler.Handler) Handler
+	New(s3Handler *s3_handler.Handler) *Handler
 }
 
 func New(s3Handler *s3_handler.Handler) *Handler {

@@ -8,7 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"io"
 	"net/http"
-	s3_handler "sidecar/aws/handler"
+	s3_handler "sidecar/aws/handler/s3"
 	"sidecar/converter"
 	"strconv"
 	"strings"

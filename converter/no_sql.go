@@ -169,6 +169,19 @@ func ValueToAWS(value interface{}) dynamodb.AttributeValue {
 			M: attributeMap,
 		}
 	}
+	keyValue, ok := value.(datastore.Key)
+	if ok {
+		if keyValue.ID != 0 {
+			strOfInt := strconv.FormatInt(keyValue.ID, 10)
+			return dynamodb.AttributeValue{
+				N: &strOfInt,
+			}
+		} else {
+			return dynamodb.AttributeValue{
+				S: &keyValue.Name,
+			}
+		}
+	}
 	stringValue := fmt.Sprint(value)
 	return dynamodb.AttributeValue{
 		S: &stringValue,
