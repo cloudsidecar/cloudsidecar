@@ -13,11 +13,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/mux"
+	"github.com/spf13/viper"
 	"google.golang.org/api/option"
 	"log"
 	"net/http"
 	"os"
+	s3_handler "sidecar/aws/handler/s3"
+	"sidecar/aws/handler/s3/bucket"
 	conf "sidecar/config"
 	myhandler "sidecar/handler"
 	"time"
@@ -43,10 +47,34 @@ func newGCPDatastore(ctx context.Context, project string, keyFileLocation string
 	return datastore.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
 }
 
+func loadConfig(config *conf.Config) {
+	err := viper.Unmarshal(config)
+	if err != nil {
+		panic(fmt.Sprint("Cannot load config", os.Args[1]))
+	}
+}
+
 func main() {
-	config := conf.FromFile(os.Args[1])
+	//config := conf.FromFile(os.Args[1])
+	var config conf.Config
+	bucketHandlers := make(map[string]s3_handler.HandlerInterface)
+	viper.SetConfigFile(os.Args[1])
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic(fmt.Sprint("Cannot load config", os.Args[1]))
+	}
+	viper.WatchConfig()
+	viper.OnConfigChange(func(e fsnotify.Event) {
+		fmt.Println("Config file changed:", e.Name)
+		loadConfig(&config)
+		for key, handler := range bucketHandlers {
+			handler.SetConfig(viper.Sub(fmt.Sprint("aws_configs.", key)))
+			fmt.Println("Setting config", handler.GetConfig())
+		}
+	})
+	loadConfig(&config)
 	fmt.Println("hi ", config)
-	for _, awsConfig := range config.AwsConfigs  {
+	for key, awsConfig := range config.AwsConfigs  {
 		port := awsConfig.Port
 		r := mux.NewRouter()
 		configs := defaults.Config()
@@ -57,21 +85,22 @@ func main() {
 		if awsConfig.ServiceType == "s3" {
 			svc := s3.New(configs)
 			s3Handler := myhandler.S3Handler{S3Client: svc}
+			handler := s3_handler.Handler{S3Client: svc}
 			if awsConfig.DestinationGCPConfig != nil {
-				if awsConfig.DestinationGCPConfig.GCSConfig != nil {
-					s3Handler.GCSConfig = awsConfig.DestinationGCPConfig.GCSConfig
-				}
+				handler.Config = viper.Sub(fmt.Sprint("aws_configs.", key))
 				ctx := context.Background()
 				gcpClient, err := newGCPStorage(ctx, awsConfig.DestinationGCPConfig.KeyFileLocation)
 				if err != nil {
 					panic(fmt.Sprintln("Error setting up gcp client", err))
 				}
-				s3Handler.GCPClient = gcpClient
-				s3Handler.Context = &ctx
+				handler.GCPClient = gcpClient
+				handler.Context = &ctx
 			}
+			bucketHandler := &bucket.Handler{Handler: handler}
+			bucketHandlers[key] = bucketHandler
+			r.HandleFunc("/{bucket}", bucketHandler.Handle).Methods("GET")
 			r.HandleFunc("/{bucket}", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
 			r.HandleFunc("/{bucket}/", s3Handler.S3ACL).Queries("acl", "").Methods("GET")
-			r.HandleFunc("/{bucket}", s3Handler.S3List).Methods("GET")
 			r.HandleFunc("/{bucket}/", s3Handler.S3List).Methods("GET")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3HeadFile).Methods("HEAD")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3GetFile).Methods("GET")
