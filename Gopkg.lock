@@ -428,6 +428,7 @@
     "github.com/aws/aws-sdk-go-v2/service/kinesis",
     "github.com/aws/aws-sdk-go-v2/service/s3",
     "github.com/aws/aws-sdk-go-v2/service/s3/s3manager",
+    "github.com/fsnotify/fsnotify",
     "github.com/gorilla/mux",
     "github.com/spf13/viper",
     "google.golang.org/api/iterator",

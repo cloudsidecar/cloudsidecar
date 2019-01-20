@@ -20,8 +20,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	s3_handler "sidecar/aws/handler/s3"
+	s3_handler "sidecar/aws/handler"
 	"sidecar/aws/handler/s3/bucket"
+	"sidecar/aws/handler/s3/object"
 	conf "sidecar/config"
 	myhandler "sidecar/handler"
 	"time"
@@ -55,9 +56,8 @@ func loadConfig(config *conf.Config) {
 }
 
 func main() {
-	//config := conf.FromFile(os.Args[1])
 	var config conf.Config
-	bucketHandlers := make(map[string]s3_handler.HandlerInterface)
+	s3Handlers := make(map[string]s3_handler.HandlerInterface)
 	viper.SetConfigFile(os.Args[1])
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -67,7 +67,7 @@ func main() {
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		fmt.Println("Config file changed:", e.Name)
 		loadConfig(&config)
-		for key, handler := range bucketHandlers {
+		for key, handler := range s3Handlers {
 			handler.SetConfig(viper.Sub(fmt.Sprint("aws_configs.", key)))
 			fmt.Println("Setting config", handler.GetConfig())
 		}
@@ -84,10 +84,11 @@ func main() {
 		configs.Region = endpoints.UsEast1RegionID
 		if awsConfig.ServiceType == "s3" {
 			svc := s3.New(configs)
-			s3Handler := myhandler.S3Handler{S3Client: svc}
-			handler := s3_handler.Handler{S3Client: svc}
+			handler := s3_handler.Handler{
+				S3Client: svc,
+				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
+			}
 			if awsConfig.DestinationGCPConfig != nil {
-				handler.Config = viper.Sub(fmt.Sprint("aws_configs.", key))
 				ctx := context.Background()
 				gcpClient, err := newGCPStorage(ctx, awsConfig.DestinationGCPConfig.KeyFileLocation)
 				if err != nil {
@@ -96,15 +97,16 @@ func main() {
 				handler.GCPClient = gcpClient
 				handler.Context = &ctx
 			}
-			bucketHandler := &bucket.Handler{Handler: handler}
-			bucketHandlers[key] = bucketHandler
+			bucketHandler := bucket.New(&handler)
+			objectHandler := object.New(&handler)
+			s3Handlers[key] = &handler
+			r.HandleFunc("/{bucket}", bucketHandler.ACLHandle).Queries("acl", "").Methods("GET")
+			r.HandleFunc("/{bucket}/", bucketHandler.ACLHandle).Queries("acl", "").Methods("GET")
 			r.HandleFunc("/{bucket}", bucketHandler.ListHandle).Methods("GET")
-			r.HandleFunc("/{bucket}", bucketHandler.S3ACL).Queries("acl", "").Methods("GET")
-			r.HandleFunc("/{bucket}/", bucketHandler.S3ACL).Queries("acl", "").Methods("GET")
 			r.HandleFunc("/{bucket}/", bucketHandler.ListHandle).Methods("GET")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3HeadFile).Methods("HEAD")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3GetFile).Methods("GET")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", s3Handler.S3PutFile).Methods("PUT")
+			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.HeadHandle).Methods("HEAD")
+			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.GetHandle).Methods("GET")
+			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.PutHandle).Methods("PUT")
 		} else if awsConfig.ServiceType == "kinesis" {
 			svc := kinesis.New(configs)
 			kinesisHandler := myhandler.KinesisHandler{KinesisClient: svc}
@@ -171,8 +173,6 @@ func main() {
 		}()
 	}
 	r := mux.NewRouter()
-	s3 := myhandler.S3Handler{S3Client: nil}
-	r.HandleFunc("/test", s3.S3List).Methods("GET")
 	/*
 	plug, err := plugin.Open("eng.so")
 	if err != nil {

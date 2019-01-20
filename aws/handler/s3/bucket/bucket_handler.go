@@ -7,7 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/mux"
 	"net/http"
-	s3_handler "sidecar/aws/handler/s3"
+	s3_handler "sidecar/aws/handler"
 	"sidecar/converter"
 	"sidecar/response_type"
 	"strconv"
@@ -19,30 +19,23 @@ type HandlerPlugin interface {
 }
 
 type Handler struct {
-	s3_handler.Handler
+	*s3_handler.Handler
 }
-
 
 type Bucket interface {
 	ListHandle(writer http.ResponseWriter, request *http.Request)
 	ListParseInput(r *http.Request) (*s3.ListObjectsInput, error)
 	ACLHandle(writer http.ResponseWriter, request *http.Request)
-	ACLParseInput(r *http.Request) (*s3.ListObjectsInput, error)
+	ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, error)
+	New(s3Handler *s3_handler.Handler) Handler
+}
+
+func New(s3Handler *s3_handler.Handler) *Handler {
+	return &Handler{s3Handler}
 }
 
 
-func (wrapper *Handler) bucketRename(bucket string) string {
-	fmt.Println(wrapper, wrapper.Config)
-	renameMap := wrapper.Config.GetStringMapString("gcp_destination_config.gcs_config.bucket_rename")
-	if renameMap != nil {
-		if val, ok := renameMap[bucket]; ok {
-			return val
-		}
-	}
-	return bucket
-}
-
-func (wrapper Handler) ListParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
+func (wrapper *Handler) ListParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
 	vars := mux.Vars(request)
 	bucket := vars["bucket"]
 	fmt.Printf("Headers: %s\n", request.URL)
@@ -79,7 +72,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 	bucket := *input.Bucket
 	var response *response_type.AWSListBucketResponse
 	if wrapper.GCPClient != nil {
-		bucket = wrapper.bucketRename(bucket)
+		bucket = wrapper.BucketRename(bucket)
 		bucketObject := wrapper.GCPClient.Bucket(bucket)
 		it := bucketObject.Objects(*wrapper.Context, &storage.Query{
 			Delimiter: *input.Delimiter,
@@ -136,11 +129,17 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 }
 
 
-func (wrapper *Handler) S3ACL(writer http.ResponseWriter, request *http.Request) {
-	vars := mux.Vars(request)
+func (wrapper *Handler) ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, error) {
+	vars := mux.Vars(r)
 	bucket := vars["bucket"]
+	return &s3.GetBucketAclInput{Bucket: &bucket}, nil
+}
+
+func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Request) {
+	fmt.Println("WHAT")
+	input, _ := wrapper.ACLParseInput(request)
 	if wrapper.GCPClient != nil {
-		bucket = wrapper.bucketRename(bucket)
+		bucket := wrapper.BucketRename(*input.Bucket)
 		acl := wrapper.GCPClient.Bucket(bucket).ACL()
 		aclList, err := acl.List(*wrapper.Context)
 		if err != nil {
@@ -153,7 +152,7 @@ func (wrapper *Handler) S3ACL(writer http.ResponseWriter, request *http.Request)
 		writer.Write([]byte(s3_handler.XmlHeader))
 		writer.Write([]byte(string(output)))
 	} else {
-		req := wrapper.S3Client.GetBucketAclRequest(&s3.GetBucketAclInput{Bucket: &bucket})
+		req := wrapper.S3Client.GetBucketAclRequest(input)
 		resp, respError := req.Send()
 		if respError != nil {
 			panic(fmt.Sprintf("Error %s", respError))
