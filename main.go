@@ -57,6 +57,7 @@ func loadConfig(config *conf.Config) {
 	}
 }
 
+
 func main() {
 	var config conf.Config
 	awsHandlers := make(map[string]aws_handler.HandlerInterface)

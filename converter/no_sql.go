@@ -5,6 +5,7 @@ import (
 	"cloud.google.com/go/datastore"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"sidecar/aws/handler/dynamo/antlr"
 	"sidecar/response_type"
 	"strconv"
 	"strings"
@@ -70,6 +71,8 @@ func handleFilterExpression(
 	filterExpression string,
 	attributeNames map[string]string,
 	attributeValues map[string]dynamodb.AttributeValue) (*datastore.Query, map[string][]interface {}, error){
+
+	/*
 	queryString := filterExpression
 	if strings.Index(queryString, "(") != -1 {
 		queryString = queryString[1:len(queryString) - 1]
@@ -115,14 +118,18 @@ func handleFilterExpression(
 			}
 		}
 	}
+	*/
 	newQuery := query
-	for i, queryPiece := range queryPieces {
-		if len(queryPiece) != 0 {
-			queryPiece = removeParens(queryPiece)
-			newQuery = newQuery.Filter(queryPiece, queryValues[i])
-		}
+	attributeStringValues := make(map[string]interface {})
+	for key, value := range attributeValues {
+		attributeStringValues[key] = awsAttirbuteToValue(value)
 	}
-	return newQuery, inFilters, nil
+	parser := antlr.Lex(filterExpression, attributeNames, attributeStringValues)
+	for i, queryPiece := range parser.Filters {
+		fmt.Println("Adding filter", queryPiece, parser.FilterValues[i])
+		newQuery = newQuery.Filter(queryPiece, parser.FilterValues[i])
+	}
+	return newQuery, parser.InFilters, nil
 }
 
 func AWSScanToGCPDatastoreQuery(input *dynamodb.ScanInput) (*datastore.Query, map[string][]interface {}, error) {

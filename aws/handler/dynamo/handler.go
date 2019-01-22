@@ -146,7 +146,7 @@ func (handler *DynamoHandler) ScanHandle(writer http.ResponseWriter, request *ht
 	var resp *dynamodb.ScanOutput
 	if handler.GCPDatastoreClient != nil {
 		query, inFilters, _ := converter.AWSScanToGCPDatastoreQuery(input)
-		fmt.Println(query)
+		fmt.Println("Query", query)
 		var items []response_type.Map
 		keys, err := handler.GCPDatastoreClient.GetAll(*handler.Context, query, &items)
 		fmt.Println(keys, err)
