@@ -53,7 +53,7 @@ func newGCPDatastore(ctx context.Context, project string, keyFileLocation string
 func loadConfig(config *conf.Config) {
 	err := viper.Unmarshal(config)
 	if err != nil {
-		panic(fmt.Sprint("Cannot load config", os.Args[1]))
+		panic(fmt.Sprint("Cannot load config ", os.Args[1], err))
 	}
 }
 
@@ -64,7 +64,8 @@ func main() {
 	viper.SetConfigFile(os.Args[1])
 	err := viper.ReadInConfig()
 	if err != nil {
-		panic(fmt.Sprint("Cannot load config", os.Args[1]))
+		fmt.Println(err)
+		panic(fmt.Sprintf("Cannot load config %s %s", os.Args[1], err))
 	}
 	viper.WatchConfig()
 	viper.OnConfigChange(func(e fsnotify.Event) {

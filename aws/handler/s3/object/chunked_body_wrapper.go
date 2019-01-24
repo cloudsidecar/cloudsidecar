@@ -9,8 +9,6 @@ import (
 
 type ChunkedReaderWrapper struct {
 	Reader            *io.ReadCloser
-	ContentLength     *int64
-	Buffer            []byte
 	ChunkNextPosition int
 	ChunkSize         int
 }
@@ -55,7 +53,7 @@ func (wrapper *ChunkedReaderWrapper) ReadHeader() (s string, err error) {
 }
 
 func (wrapper *ChunkedReaderWrapper) Read(p []byte) (n int, err error) {
-	if wrapper.Buffer == nil || len(wrapper.Buffer) == 0 {
+	if wrapper.ChunkNextPosition == -1 {
 		wrapper.ChunkNextPosition = 0
 		chunkSize, err := wrapper.ReadHeaderGetChunkSize()
 		fmt.Printf("Chunk size %d\n", chunkSize)
@@ -67,13 +65,6 @@ func (wrapper *ChunkedReaderWrapper) Read(p []byte) (n int, err error) {
 		if chunkSize == 0 {
 			return 0, io.EOF
 		}
-		buffer := make([]byte, chunkSize)
-		wrapper.Buffer = buffer
-		_, err = io.ReadFull(*wrapper.Reader, buffer)
-		if err != nil {
-			fmt.Printf("Error reading all %s", err)
-			return 0, err
-		}
 	}
 	// 0: wrapper.Buffer = 5, CNP = 0, bytesLeft = 5
 	// pSize = 2
@@ -81,18 +72,21 @@ func (wrapper *ChunkedReaderWrapper) Read(p []byte) (n int, err error) {
 	// 1: CNP = 2, bytesLeft = 3
 	// read [2, 4]
 	// 2: CNP = 4, bytesLeft = 1
-	bytesLeft := len(wrapper.Buffer) - wrapper.ChunkNextPosition
-	pSize := len(p)
-	if pSize <= bytesLeft {
-		nextPos := wrapper.ChunkNextPosition + pSize
-		copy(p, (wrapper.Buffer)[wrapper.ChunkNextPosition:nextPos])
-		wrapper.ChunkNextPosition = nextPos
-		fmt.Println("READO ", pSize, bytesLeft, len(wrapper.Buffer))
-		return pSize, nil
-	} else {
-		fmt.Println("DONE READO ", pSize, bytesLeft, len(wrapper.Buffer))
-		n := copy(p, wrapper.Buffer[wrapper.ChunkNextPosition:])
-		wrapper.Buffer = nil
-		return n, nil
+	/*
+	_, err = io.ReadFull(*wrapper.Reader, wrapper.Buffer[:wrapper.BufferSize])
+	if err != nil {
+		fmt.Printf("Error reading all %s", err)
+		return 0, err
 	}
+	*/
+	bytesLeft := wrapper.ChunkSize - wrapper.ChunkNextPosition
+	pLen := len(p)
+	if bytesLeft <= pLen {
+		n, err = io.ReadFull(*wrapper.Reader, p[:bytesLeft])
+		wrapper.ChunkNextPosition = -1
+	} else {
+		n, err = io.ReadFull(*wrapper.Reader, p)
+		wrapper.ChunkNextPosition += n
+	}
+	return n, err
 }

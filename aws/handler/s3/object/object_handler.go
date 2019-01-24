@@ -59,7 +59,7 @@ func (handler *Handler) PutParseInput(r *http.Request) (*s3manager.UploadInput, 
 		fmt.Printf("CHUNKED %d", contentLength)
 		readerWrapper := ChunkedReaderWrapper{
 			Reader:         &r.Body,
-			ContentLength:  &contentLength,
+			ChunkNextPosition: -1,
 		}
 		s3Req.Body = &readerWrapper
 	}
