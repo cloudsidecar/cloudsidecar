@@ -46,6 +46,7 @@ func (s *Listener) ExitExpression(ctx *antlr_parser.ExpressionContext) {
 }
 
 func Lex(input string, identifiers map[string]string, values map[string]interface {}) Listener {
+	fmt.Println("Parsing ", input, identifiers, values)
 	is := antlr.NewInputStream(input)
 
 	// Create the Lexer
