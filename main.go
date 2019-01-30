@@ -27,6 +27,7 @@ import (
 	"sidecar/aws/handler/s3/bucket"
 	"sidecar/aws/handler/s3/object"
 	conf "sidecar/config"
+	"sidecar/logging"
 	"time"
 )
 
@@ -59,25 +60,25 @@ func loadConfig(config *conf.Config) {
 
 
 func main() {
+	logging.Init()
 	var config conf.Config
 	awsHandlers := make(map[string]aws_handler.HandlerInterface)
 	viper.SetConfigFile(os.Args[1])
 	err := viper.ReadInConfig()
 	if err != nil {
-		fmt.Println(err)
+		logging.Log.Error("", err)
 		panic(fmt.Sprintf("Cannot load config %s %s", os.Args[1], err))
 	}
 	viper.WatchConfig()
 	viper.OnConfigChange(func(e fsnotify.Event) {
-		fmt.Println("Config file changed:", e.Name)
+		logging.Log.Debug("Config file changed:", e.Name)
 		loadConfig(&config)
 		for key, handler := range awsHandlers {
 			handler.SetConfig(viper.Sub(fmt.Sprint("aws_configs.", key)))
-			fmt.Println("Setting config", handler.GetConfig())
 		}
 	})
 	loadConfig(&config)
-	fmt.Println("hi ", config)
+	logging.Log.Info("Started... ")
 	for key, awsConfig := range config.AwsConfigs  {
 		port := awsConfig.Port
 		r := mux.NewRouter()
@@ -170,7 +171,7 @@ func main() {
 			r.HandleFunc("/", dynamoHandler.Handle).Methods("POST")
 		}
 		r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			fmt.Printf("Catch all %s %s %s", request.URL, request.Method, request.Header)
+			logging.Log.Info("Catch all %s %s %s", request.URL, request.Method, request.Header)
 			writer.WriteHeader(404)
 		})
 		srv := &http.Server{

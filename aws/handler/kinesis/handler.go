@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"net/http"
+	"sidecar/logging"
 	"sidecar/response_type"
 	"sync"
 )
@@ -31,7 +32,7 @@ func (handler *KinesisHandler) PublishParseInput(r *http.Request) (*response_typ
 	var err error
 	err = decoder.Decode(&payload)
 	if err != nil {
-		fmt.Println("Error reading kinesis payload", err)
+		logging.Log.Error("Error reading kinesis payload", err)
 	}
 	return &payload, err
 }
@@ -50,7 +51,7 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 				Data: str,
 			}).Get(*handler.Context)
 			if err != nil {
-				fmt.Println("Error sending", err)
+				logging.Log.Error("Error sending", err)
 				writer.WriteHeader(400)
 				writer.Write([]byte(fmt.Sprint(err)))
 				return
@@ -60,8 +61,6 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 				ShardId: &gcpShardId,
 			}
 			json.NewEncoder(writer).Encode(jsonOutput)
-			// write(output.String(), &writer)
-			fmt.Println("Single payload ", string(str))
 
 		} else {
 			req := handler.KinesisClient.PutRecordRequest(&kinesis.PutRecordInput{
@@ -71,7 +70,7 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 			})
 			output, err := req.Send()
 			if err != nil {
-				fmt.Println("Error sending", err)
+				logging.Log.Error("Error sending", err)
 				writer.WriteHeader(400)
 				writer.Write([]byte(fmt.Sprint(err)))
 				return
@@ -81,18 +80,14 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 				ShardId: output.ShardId,
 			}
 			json.NewEncoder(writer).Encode(jsonOutput)
-			// write(output.String(), &writer)
-			fmt.Println("Single payload ", string(str))
 		}
 	} else if len(payload.Records) > 0 {
-		fmt.Println("Multiple records")
 		if handler.GCPClient != nil {
 			results := make([]*pubsub.PublishResult, len(payload.Records))
 			var wg sync.WaitGroup
 			wg.Add(len(payload.Records))
 			for i, record := range payload.Records {
 				str, _ := base64.StdEncoding.DecodeString(record.Data)
-				fmt.Println("Record ", string(str), " ", record.PartitionKey)
 				results[i] = handler.GCPClient.Topic(payload.StreamName).Publish(*handler.Context, &pubsub.Message{
 					Data: str,
 				})
@@ -125,7 +120,6 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 				FailedRequestCount: failedCount,
 				Records: records,
 			}
-			fmt.Println(records)
 			json.NewEncoder(writer).Encode(jsonOutput)
 
 		} else {
@@ -135,18 +129,16 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 			}
 			for i, record := range payload.Records {
 				str, _ := base64.StdEncoding.DecodeString(record.Data)
-				fmt.Println("Record ", string(str), " ", record.PartitionKey)
 				key := record.PartitionKey
 				input.Records[i] = kinesis.PutRecordsRequestEntry{
 					Data: str,
 					PartitionKey: &key,
 				}
 			}
-			fmt.Println("Records ", input.Records)
 			req := handler.KinesisClient.PutRecordsRequest(&input)
 			output, err := req.Send()
 			if err != nil {
-				fmt.Println("Error sending", err)
+				logging.Log.Error("Error sending", err)
 				writer.WriteHeader(400)
 				writer.Write([]byte(fmt.Sprint(err)))
 				return
@@ -168,12 +160,11 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 					}
 				}
 			}
-			fmt.Println(output.Records)
 			json.NewEncoder(writer).Encode(jsonOutput)
 
 		}
 	} else {
-		fmt.Println("Missing data")
+		logging.Log.Error("Missing data")
 		writer.WriteHeader(400)
 	}
 }

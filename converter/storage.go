@@ -9,6 +9,7 @@ import (
 	"google.golang.org/api/iterator"
 	"io"
 	"net/http"
+	"sidecar/logging"
 	"sidecar/response_type"
 	"strconv"
 	"strings"
@@ -33,19 +34,18 @@ func GCPUpload(input *s3manager.UploadInput, writer *storage.Writer) (int64, err
 		n, err := reader.Read(buffer)
 		if n > 0 {
 			bytes += int64(n)
-			fmt.Println("Read bytes ", n)
+			logging.Log.Debug("Read bytes ", n)
 			_, writeErr := writer.Write(buffer[:n])
 			if writeErr != nil {
-				fmt.Println("Write error ", writeErr)
+				logging.Log.Error("Write error ", writeErr)
 				return bytes, writeErr
 			}
 		}
 		if err == io.EOF {
-			fmt.Println("EOF")
 			break
 		}
 		if err != nil {
-			fmt.Println("ERROR ", err)
+			logging.Log.Error("ERROR ", err)
 			return bytes, err
 		}
 	}
@@ -56,10 +56,6 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 
 	contentI := 0
 	prefixI := 0
-	fmt.Printf("Remaining %d\n", input.PageInfo().Remaining())
-	fmt.Printf("MaxSize %d\n", input.PageInfo().MaxSize)
-	fmt.Printf("Token %s\n", input.PageInfo().Token)
-	fmt.Printf("Marker %s\n", listRequest.Marker)
 	var pageResponse []*storage.ObjectAttrs
 	var marker string
 	if listRequest.Marker != nil && *listRequest.Marker != "" {

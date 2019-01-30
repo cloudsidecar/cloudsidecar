@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	antlr_parser "sidecar/dynamo_parser"
+	"sidecar/logging"
 )
 
 type Listener struct {
@@ -21,7 +22,6 @@ func (s *Listener) ExitExpression(ctx *antlr_parser.ExpressionContext) {
 		filter := fmt.Sprint(ident, " ", compare.GetText())
 		s.Filters = append(s.Filters, filter)
 		value := s.values[ctx.VALUE_HOLDER(0).GetText()]
-		fmt.Println(ctx.VALUE_HOLDER(0).GetText())
 		s.FilterValues = append(s.FilterValues, value)
 		//vars := ctx.GetTokens(antlr_parser.DynamoParserVALUE_HOLDER)
 	} else if between := ctx.BETWEEN(); between != nil {
@@ -46,7 +46,7 @@ func (s *Listener) ExitExpression(ctx *antlr_parser.ExpressionContext) {
 }
 
 func Lex(input string, identifiers map[string]string, values map[string]interface {}) Listener {
-	fmt.Println("Parsing ", input, identifiers, values)
+	logging.Log.Debug("Parsing ", input, identifiers, values)
 	is := antlr.NewInputStream(input)
 
 	// Create the Lexer
@@ -60,9 +60,9 @@ func Lex(input string, identifiers map[string]string, values map[string]interfac
 		InFilters:   make(map[string][]interface {}),
 	}
 	antlr.ParseTreeWalkerDefault.Walk(&listener, p.Start())
-	fmt.Println(listener.Filters)
-	fmt.Println(listener.FilterValues)
-	fmt.Println(listener.InFilters)
+	logging.Log.Debug("", listener.Filters)
+	logging.Log.Debug("", listener.FilterValues)
+	logging.Log.Debug("", listener.InFilters)
 	return listener
 
 }

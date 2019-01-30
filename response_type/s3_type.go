@@ -3,7 +3,6 @@ package response_type
 import (
 	"cloud.google.com/go/datastore"
 	"encoding/xml"
-	"fmt"
 	"reflect"
 )
 const (
@@ -19,7 +18,6 @@ func (m Map) Load(c []datastore.Property) error {
 		if reflect.ValueOf(p.Value).Kind() == reflect.Ptr {
 			ptr := p.Value.(* datastore.Entity)
 			deref := *ptr
-			fmt.Println(deref)
 			mapValue := make(Map)
 			for _, prop := range deref.Properties{
 				mapValue[prop.Name] = prop.Value
@@ -28,16 +26,6 @@ func (m Map) Load(c []datastore.Property) error {
 		} else{
 			m[p.Name] = p.Value
 		}
-		/*if p.Multiple {
-			value := reflect.ValueOf(m[p.Name])
-			if value.Kind() != reflect.Slice {
-				m[p.Name] = []interface{}{p.Value}
-			} else {
-				m[p.Name] = append(m[p.Name].([]interface{}), p.Value)
-			}
-		} else {
-			m[p.Name] = p.Value
-		}*/
 	}
 	return nil
 }

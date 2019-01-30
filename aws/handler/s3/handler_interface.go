@@ -3,7 +3,6 @@ package s3
 import (
 	"cloud.google.com/go/storage"
 	"context"
-	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/spf13/viper"
 	"strings"
@@ -55,7 +54,6 @@ func (handler *Handler) SetConfig(config *viper.Viper) {
 func (handler *Handler) BucketRename(bucket string) string {
 	renameMap := handler.Config.GetStringMapString("gcp_destination_config.gcs_config.bucket_rename")
 	bucket = strings.Replace(bucket, ".",  "__dot__",  -1)
-	fmt.Println("Looking for", bucket, "in", renameMap)
 	if renameMap != nil {
 		if val, ok := renameMap[bucket]; ok {
 			return val

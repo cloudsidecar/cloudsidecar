@@ -9,6 +9,7 @@ import (
 	"net/http"
 	s3_handler "sidecar/aws/handler/s3"
 	"sidecar/converter"
+	"sidecar/logging"
 	"sidecar/response_type"
 	"strconv"
 )
@@ -38,7 +39,6 @@ func New(s3Handler *s3_handler.Handler) *Handler {
 func (wrapper *Handler) ListParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
 	vars := mux.Vars(request)
 	bucket := vars["bucket"]
-	fmt.Printf("Headers: %s\n", request.URL)
 	listRequest := &s3.ListObjectsInput{Bucket: &bucket}
 	delim := request.URL.Query().Get("delimiter")
 	listRequest.Delimiter = &delim
@@ -81,11 +81,10 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 		})
 		response = converter.GCSListResponseToAWS(it, input)
 	} else {
-		fmt.Printf("Requesting %s", request)
 		req := wrapper.S3Client.ListObjectsRequest(input)
 		resp, respError := req.Send()
 		if respError != nil {
-			fmt.Printf("Error %s\n", respError)
+			logging.Log.Error("Error %s\n", respError)
 			writer.WriteHeader(400)
 			writer.Write([]byte(fmt.Sprint(err)))
 		}
@@ -123,7 +122,6 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 		}
 	}
 	output, _ := xml.Marshal(response)
-	fmt.Printf("Response %s", response)
 	writer.Write([]byte(s3_handler.XmlHeader))
 	writer.Write([]byte(string(output)))
 }
@@ -136,19 +134,17 @@ func (wrapper *Handler) ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, e
 }
 
 func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Request) {
-	fmt.Println("WHAT")
 	input, _ := wrapper.ACLParseInput(request)
 	if wrapper.GCPClient != nil {
 		bucket := wrapper.BucketRename(*input.Bucket)
 		acl := wrapper.GCPClient.Bucket(bucket).ACL()
 		aclList, err := acl.List(*wrapper.Context)
 		if err != nil {
-			fmt.Printf("Error with GCP %s", err)
+			logging.Log.Error("Error with GCP %s", err)
 			writer.WriteHeader(404)
 			return
 		}
 		output, _ := xml.MarshalIndent(converter.GCSACLResponseToAWS(aclList), "  ", "    ")
-		fmt.Printf("Response %s", aclList)
 		writer.Write([]byte(s3_handler.XmlHeader))
 		writer.Write([]byte(string(output)))
 	} else {
@@ -177,7 +173,6 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 			},
 		}
 		output, _ := xml.MarshalIndent(s3Resp, "  ", "    ")
-		fmt.Printf("Response %s", resp)
 		writer.Write([]byte(s3_handler.XmlHeader))
 		writer.Write([]byte(string(output)))
 	}

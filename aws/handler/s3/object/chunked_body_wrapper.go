@@ -1,8 +1,8 @@
 package object
 
 import (
-	"fmt"
 	"io"
+	"sidecar/logging"
 	"strconv"
 	"strings"
 )
@@ -16,10 +16,10 @@ type ChunkedReaderWrapper struct {
 func (wrapper *ChunkedReaderWrapper) ReadHeaderGetChunkSize() (i int, err error) {
 	chunkedHeader, err := wrapper.ReadHeader()
 	if err != nil {
-		fmt.Printf("Error reading header %s", err)
+		logging.Log.Error("Error reading header %s", err)
 		return 0, err
 	}
-	fmt.Printf("Read header %s\n", chunkedHeader)
+	logging.Log.Info("Read header %s\n", chunkedHeader)
 	chunkedSplit := strings.SplitN(chunkedHeader, ";", 2)
 	chunkSize, err := strconv.ParseInt(chunkedSplit[0], 16, 32)
 	return int(chunkSize), err
@@ -56,9 +56,9 @@ func (wrapper *ChunkedReaderWrapper) Read(p []byte) (n int, err error) {
 	if wrapper.ChunkNextPosition == -1 {
 		wrapper.ChunkNextPosition = 0
 		chunkSize, err := wrapper.ReadHeaderGetChunkSize()
-		fmt.Printf("Chunk size %d\n", chunkSize)
+		logging.Log.Debug("Chunk size %d\n", chunkSize)
 		if err != nil {
-			fmt.Printf("Error reading header %s", err)
+			logging.Log.Error("Error reading header %s", err)
 			return 0, err
 		}
 		wrapper.ChunkSize = chunkSize
@@ -66,19 +66,6 @@ func (wrapper *ChunkedReaderWrapper) Read(p []byte) (n int, err error) {
 			return 0, io.EOF
 		}
 	}
-	// 0: wrapper.Buffer = 5, CNP = 0, bytesLeft = 5
-	// pSize = 2
-	// read [0, 2]
-	// 1: CNP = 2, bytesLeft = 3
-	// read [2, 4]
-	// 2: CNP = 4, bytesLeft = 1
-	/*
-	_, err = io.ReadFull(*wrapper.Reader, wrapper.Buffer[:wrapper.BufferSize])
-	if err != nil {
-		fmt.Printf("Error reading all %s", err)
-		return 0, err
-	}
-	*/
 	bytesLeft := wrapper.ChunkSize - wrapper.ChunkNextPosition
 	pLen := len(p)
 	if bytesLeft <= pLen {

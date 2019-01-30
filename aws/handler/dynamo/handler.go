@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"net/http"
 	"sidecar/converter"
+	"sidecar/logging"
 	"sidecar/response_type"
 	"strings"
 )
@@ -55,18 +56,21 @@ func (handler *DynamoHandler) QueryHandle(writer http.ResponseWriter, request *h
 	err := decoder.Decode(&input)
 	if err != nil {
 		writer.WriteHeader(400)
-		fmt.Println("Error with decoding input", err)
+		logging.Log.Error("Error with decoding input", err)
 		writer.Write([]byte(fmt.Sprint(err)))
 		return
 	}
 	var resp *dynamodb.QueryOutput
 	if handler.GCPDatastoreClient != nil {
 		query, inFilters, _ := converter.AWSQueryToGCPDatastoreQuery(&input)
-		fmt.Println(query)
 		var items []response_type.Map
 		keys, err := handler.GCPDatastoreClient.GetAll(*handler.Context, query, &items)
-		fmt.Println(err)
-		fmt.Println(keys)
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error with decoding input", err)
+			writer.Write([]byte(fmt.Sprint(err)))
+			return
+		}
 		length := int64(len(keys))
 		responseItems := make([]map[string]dynamodb.AttributeValue, length)
 		tableMap := handler.Config.GetStringMapString("gcp_destination_config.datastore_config.table_key_map")
@@ -87,7 +91,6 @@ func (handler *DynamoHandler) QueryHandle(writer http.ResponseWriter, request *h
 			}
 		}
 		if len(inFilters) != 0 {
-			fmt.Println("BOOOYA")
 			items = filteredItems
 		}
 		for i, item := range items {
@@ -108,12 +111,10 @@ func (handler *DynamoHandler) QueryHandle(writer http.ResponseWriter, request *h
 	}
 	if err != nil {
 		writer.WriteHeader(400)
-		fmt.Println("Error", err)
+		logging.Log.Error("Error", err)
 		writer.Write([]byte(fmt.Sprint(err)))
 		return
 	}
-	fmt.Println(resp)
-	fmt.Println(input)
 	json.NewEncoder(writer).Encode(resp)
 
 }
@@ -139,17 +140,17 @@ func (handler *DynamoHandler) ScanHandle(writer http.ResponseWriter, request *ht
 	input, err := handler.ScanParseInput(request)
 	if err != nil {
 		writer.WriteHeader(400)
-		fmt.Println("Error with decoding input", err)
+		logging.Log.Error("Error with decoding input", err)
 		writer.Write([]byte(fmt.Sprint(err)))
 		return
 	}
 	var resp *dynamodb.ScanOutput
 	if handler.GCPDatastoreClient != nil {
 		query, inFilters, _ := converter.AWSScanToGCPDatastoreQuery(input)
-		fmt.Println("Query", query)
+		logging.Log.Debug("Query", query)
 		var items []response_type.Map
 		keys, err := handler.GCPDatastoreClient.GetAll(*handler.Context, query, &items)
-		fmt.Println(keys, err)
+		logging.Log.Debug("Keys ", keys, err)
 		length := int64(len(keys))
 		responseItems := make([]map[string]dynamodb.AttributeValue, length)
 		tableMap := handler.Config.GetStringMapString("gcp_destination_config.datastore_config.table_key_map")
@@ -159,14 +160,11 @@ func (handler *DynamoHandler) ScanHandle(writer http.ResponseWriter, request *ht
 		for i, item := range items {
 			matchCount := 0
 			for filterKey, filterValues := range inFilters {
-				fmt.Println("Filter key", filterKey)
 				if filterKey != keyFieldName {
-					fmt.Println("in filter not on key")
 					if contains(filterValues, item[filterKey]) {
 						matchCount ++
 					}
 				} else {
-					fmt.Println("in filter on key")
 					if contains(filterValues, keys[i].Name){
 						matchCount ++
 					}
@@ -188,7 +186,6 @@ func (handler *DynamoHandler) ScanHandle(writer http.ResponseWriter, request *ht
 			for fieldName, field := range item {
 				responseItems[i][fieldName] = converter.ValueToAWS(field)
 			}
-			fmt.Println("Trying to add key", keys[i])
 			responseItems[i][keyFieldName] = converter.ValueToAWS(*keys[i])
 		}
 		length = int64(len(items))
@@ -201,13 +198,13 @@ func (handler *DynamoHandler) ScanHandle(writer http.ResponseWriter, request *ht
 		resp, err = handler.DynamoClient.ScanRequest(input).Send()
 		if err != nil {
 			writer.WriteHeader(400)
-			fmt.Println("Error", err)
+			logging.Log.Error("Error", err)
 			writer.Write([]byte(fmt.Sprint(err)))
 			return
 		}
 	}
-	fmt.Println(resp)
-	fmt.Println(input)
+	logging.Log.Debug("", resp)
+	logging.Log.Debug("", input)
 	json.NewEncoder(writer).Encode(resp)
 }
 
@@ -215,7 +212,7 @@ func (handler *DynamoHandler) GetItemHandle(writer http.ResponseWriter, request 
 	input, decodeErr := handler.GetItemParseInput(request)
 	if decodeErr != nil {
 		writer.WriteHeader(400)
-		fmt.Println("Error with decoding input", decodeErr)
+		logging.Log.Error("Error with decoding input", decodeErr)
 		writer.Write([]byte(fmt.Sprint(decodeErr)))
 		return
 	}
@@ -243,7 +240,7 @@ func (handler *DynamoHandler) GetItemHandle(writer http.ResponseWriter, request 
 		row, err := handler.GCPBigTableClient.Open(*input.TableName).ReadRow(*handler.Context, columnValue)
 		if err != nil {
 			writer.WriteHeader(400)
-			fmt.Println("Error with decoding input", err)
+			logging.Log.Error("Error with decoding input", err)
 			writer.Write([]byte(fmt.Sprint(decodeErr)))
 			return
 		}
@@ -255,7 +252,6 @@ func (handler *DynamoHandler) GetItemHandle(writer http.ResponseWriter, request 
 			Kind: *input.TableName,
 			Name: columnValue,
 		}
-		fmt.Println("KEY ", key, " RESULT ", result == nil)
 		err := handler.GCPDatastoreClient.Get(
 			*handler.Context,
 			&key,
@@ -263,7 +259,7 @@ func (handler *DynamoHandler) GetItemHandle(writer http.ResponseWriter, request 
 		)
 		if err != nil {
 			writer.WriteHeader(400)
-			fmt.Println("Error getting", err)
+			logging.Log.Error("Error getting", err)
 			writer.Write([]byte(fmt.Sprint(decodeErr)))
 			return
 		}
@@ -272,13 +268,11 @@ func (handler *DynamoHandler) GetItemHandle(writer http.ResponseWriter, request 
 		resp, err = handler.DynamoClient.GetItemRequest(input).Send()
 		if err != nil {
 			writer.WriteHeader(400)
-			fmt.Println("Error", err)
+			logging.Log.Error("Error", err)
 			writer.Write([]byte(fmt.Sprint(decodeErr)))
 			return
 		}
 	}
-	fmt.Println(resp)
-	fmt.Println(input)
 	json.NewEncoder(writer).Encode(resp)
 }
 func (handler *DynamoHandler) GetItemParseInput(r *http.Request) (*dynamodb.GetItemInput, error) {

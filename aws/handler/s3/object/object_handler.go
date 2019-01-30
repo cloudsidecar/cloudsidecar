@@ -2,7 +2,6 @@ package object
 
 import (
 	"cloud.google.com/go/storage"
-	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
 	"github.com/gorilla/mux"
@@ -10,6 +9,7 @@ import (
 	"net/http"
 	s3_handler "sidecar/aws/handler/s3"
 	"sidecar/converter"
+	"sidecar/logging"
 	"strconv"
 	"strings"
 	"time"
@@ -56,7 +56,7 @@ func (handler *Handler) PutParseInput(r *http.Request) (*s3manager.UploadInput, 
 	if !isChunked {
 		s3Req.Body = r.Body
 	} else {
-		fmt.Printf("CHUNKED %d", contentLength)
+		logging.Log.Debug("CHUNKED %d", contentLength)
 		readerWrapper := ChunkedReaderWrapper{
 			Reader:         &r.Body,
 			ChunkNextPosition: -1,
@@ -77,17 +77,16 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 		defer uploader.Close()
 		_, err := converter.GCPUpload(s3Req, uploader)
 		if err != nil {
-			fmt.Printf("\nBOOO Error %s\n", err)
+			logging.Log.Error("Error %s\n", err)
 		}
 	} else {
 		uploader := s3manager.NewUploaderWithClient(handler.S3Client)
 		_, err = uploader.Upload(s3Req)
 		if err != nil {
-			fmt.Printf("Error %s", err)
+			logging.Log.Error("Error %s", err)
 		}
 	}
 	writer.WriteHeader(200)
-	fmt.Printf("DONE")
 	writer.Write([]byte(""))
 }
 
@@ -110,7 +109,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 		attrs, err := objHandle.Attrs(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
-			fmt.Printf("Error %s", err)
+			logging.Log.Error("Error %s", err)
 			return
 		}
 		converter.GCSAttrToHeaders(attrs, writer)
@@ -131,7 +130,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 		}
 		if readerError != nil {
 			writer.WriteHeader(404)
-			fmt.Printf("Error %s", readerError)
+			logging.Log.Error("Error %s", readerError)
 			return
 		}
 		defer reader.Close()
@@ -150,7 +149,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 		resp, respError := req.Send()
 		if respError != nil {
 			writer.WriteHeader(404)
-			fmt.Printf("Error %s", respError)
+			logging.Log.Error("Error %s", respError)
 			return
 		}
 		if header := resp.ServerSideEncryption; header != "" {
@@ -194,27 +193,23 @@ func (handler *Handler) HeadParseInput(r *http.Request) (*s3.HeadObjectInput, er
 
 func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := handler.HeadParseInput(request)
-	fmt.Printf("Looking for %s\n", input)
-	fmt.Printf("URL %s\n", request.URL)
 	if handler.GCPClient != nil {
 		bucket := handler.BucketRename(*input.Bucket)
 		resp, err := handler.GCPClient.Bucket(bucket).Object(*input.Key).Attrs(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
-			fmt.Printf("Error %s", err)
+			logging.Log.Error("Error %s", err)
 			return
 		}
-		fmt.Printf("Response %s\n", *resp)
 		converter.GCSAttrToHeaders(resp, writer)
 	} else {
 		req := handler.S3Client.HeadObjectRequest(input)
 		resp, respError := req.Send()
 		if respError != nil {
 			writer.WriteHeader(404)
-			fmt.Printf("Error %s", respError)
+			logging.Log.Error("Error %s", respError)
 			return
 		}
-		fmt.Printf("Response %s\n", resp.String())
 		if resp.AcceptRanges != nil {
 			writer.Header().Set("Accept-Ranges", *resp.AcceptRanges)
 		}

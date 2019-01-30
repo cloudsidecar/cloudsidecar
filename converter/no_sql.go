@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"sidecar/aws/handler/dynamo/antlr"
+	"sidecar/logging"
 	"sidecar/response_type"
 	"strconv"
 	"strings"
@@ -21,7 +22,7 @@ func GCPBigTableGetById(input *dynamodb.GetItemInput) (string, error) {
 		}
 		break
 	}
-	fmt.Println("Filtering on ", columnName, "=", columnValue)
+	logging.Log.Debug("Filtering on ", columnName, "=", columnValue)
 	return columnValue, nil
 }
 
@@ -72,53 +73,6 @@ func handleFilterExpression(
 	attributeNames map[string]string,
 	attributeValues map[string]dynamodb.AttributeValue) (*datastore.Query, map[string][]interface {}, error){
 
-	/*
-	queryString := filterExpression
-	if strings.Index(queryString, "(") != -1 {
-		queryString = queryString[1:len(queryString) - 1]
-	}
-	if attributeNames != nil {
-		for key, value := range attributeNames {
-			queryString = strings.Replace(queryString, key, value, -1)
-		}
-	}
-	var queryValue interface{}
-	queryPieces := strings.Split(queryString, " AND ")
-	queryValues := make([]interface{}, len(queryPieces))
-	inFilters := make(map[string][]interface {})
-	if attributeValues != nil {
-		for i, queryPiece := range queryPieces {
-			fmt.Println(queryString, "BOO", queryPiece)
-			if strings.Contains(queryPiece, " IN ") {
-				filterPieces := strings.SplitN(queryPiece, " IN ", 2)
-				variableName := removeParens(strings.Trim(filterPieces[0], " "))
-				inClause := filterPieces[1][1:len(filterPieces[1]) - 1]
-				inPieces := strings.Split(inClause, ",")
-				inFilters[variableName] = make([]interface {}, len(inPieces))
-				j := 0
-				for key, value := range attributeValues {
-					if strings.Contains(inClause, key) {
-						inQueryValue := awsAttirbuteToValue(value)
-						inFilters[variableName][j] = inQueryValue
-						j++
-					}
-				}
-				queryPieces[i] = ""
-				fmt.Printf("POO:%s:%s\n", variableName, inClause)
-				fmt.Println(inFilters)
-			} else {
-				for key, value := range attributeValues {
-					if strings.Contains(queryPiece, key) {
-						queryPiece = strings.Replace(queryPiece, key, "", -1)
-						queryPieces[i] = queryPiece
-						queryValue = awsAttirbuteToValue(value)
-						queryValues[i] = queryValue
-					}
-				}
-			}
-		}
-	}
-	*/
 	newQuery := query
 	attributeStringValues := make(map[string]interface {})
 	for key, value := range attributeValues {
@@ -126,7 +80,7 @@ func handleFilterExpression(
 	}
 	parser := antlr.Lex(filterExpression, attributeNames, attributeStringValues)
 	for i, queryPiece := range parser.Filters {
-		fmt.Println("Adding filter", queryPiece, parser.FilterValues[i])
+		logging.Log.Debug("Adding filter", queryPiece, parser.FilterValues[i])
 		newQuery = newQuery.Filter(queryPiece, parser.FilterValues[i])
 	}
 	return newQuery, parser.InFilters, nil
