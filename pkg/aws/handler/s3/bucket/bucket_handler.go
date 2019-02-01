@@ -7,10 +7,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/mux"
 	"net/http"
-	s3_handler "sidecar/aws/handler/s3"
-	"sidecar/converter"
-	"sidecar/logging"
-	"sidecar/response_type"
+	s3_handler "sidecar/pkg/aws/handler/s3"
+	"sidecar/pkg/converter"
+	"sidecar/pkg/logging"
+	"sidecar/pkg/response_type"
 	"strconv"
 )
 

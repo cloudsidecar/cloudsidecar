@@ -2,7 +2,7 @@ package object
 
 import (
 	"io"
-	"sidecar/logging"
+	"sidecar/pkg/logging"
 	"strconv"
 	"strings"
 )

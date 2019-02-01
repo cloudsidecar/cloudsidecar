@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	antlr_parser "sidecar/dynamo_parser"
-	"sidecar/logging"
+	"sidecar/pkg/logging"
 )
 
 type Listener struct {

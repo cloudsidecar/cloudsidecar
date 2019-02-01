@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"net/http"
-	"sidecar/converter"
-	"sidecar/logging"
-	"sidecar/response_type"
+	"sidecar/pkg/converter"
+	"sidecar/pkg/logging"
+	"sidecar/pkg/response_type"
 	"strings"
 )
 

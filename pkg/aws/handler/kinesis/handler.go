@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"net/http"
-	"sidecar/logging"
-	"sidecar/response_type"
+	"sidecar/pkg/logging"
+	"sidecar/pkg/response_type"
 	"sync"
 )
 

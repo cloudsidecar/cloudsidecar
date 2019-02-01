@@ -5,9 +5,9 @@ import (
 	"cloud.google.com/go/datastore"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"sidecar/aws/handler/dynamo/antlr"
-	"sidecar/logging"
-	"sidecar/response_type"
+	"sidecar/pkg/aws/handler/dynamo/antlr"
+	"sidecar/pkg/logging"
+	"sidecar/pkg/response_type"
 	"strconv"
 	"strings"
 )
