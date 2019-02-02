@@ -1,8 +1,11 @@
 package logging
 
 import (
+	"fmt"
 	"github.com/op/go-logging"
+	"github.com/spf13/viper"
 	"os"
+	conf "sidecar/pkg/config"
 )
 
 var Log = logging.MustGetLogger("cloud")
@@ -16,5 +19,12 @@ func Init() {
 	var backendLeveled = logging.AddModuleLevel(backendFormatter)
 	backendLeveled.SetLevel(logging.INFO, "")
 	logging.SetBackend(backendLeveled)
+}
+
+func LoadConfig(config *conf.Config) {
+	err := viper.Unmarshal(config)
+	if err != nil {
+		panic(fmt.Sprint("Cannot load config ", os.Args[1], err))
+	}
 }
 
