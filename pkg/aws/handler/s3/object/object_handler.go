@@ -4,6 +4,7 @@ import (
 	"cloud.google.com/go/storage"
 	"encoding/xml"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
 	uuid2 "github.com/google/uuid"
@@ -42,13 +43,17 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 	var resp *s3.UploadPartOutput
 	var err error
 	req := handler.S3Client.UploadPartRequest(s3Req)
+	req.HTTPRequest.Header.Set("Content-Length", request.Header.Get("Content-Length"))
+	req.HTTPRequest.Header.Set("X-Amz-Content-Sha256", request.Header.Get("X-Amz-Content-Sha256"))
+	req.Body = aws.ReadSeekCloser(request.Body)
 	resp, err = req.Send()
 	if err != nil {
 		writer.WriteHeader(404)
-		logging.Log.Error("Error %s", err)
+		logging.Log.Error("Error in uploading %s", err)
 		writer.Write([]byte(string(fmt.Sprint(err))))
 		return
 	}
+	logging.Log.Info(fmt.Sprint(resp))
 	if header := resp.ETag; header != nil {
 		writer.Header().Set("ETag", *header)
 	}
@@ -66,7 +71,6 @@ func (handler *Handler) UploadPartParseInput(r *http.Request) (*s3.UploadPartInp
 		Key: &key,
 		PartNumber: &partNumber,
 		UploadId: &uploadId,
-		Body: ReaderWrapper{r.Body},
 	}, err
 }
 
