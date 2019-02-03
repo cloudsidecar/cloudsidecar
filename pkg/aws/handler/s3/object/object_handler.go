@@ -2,11 +2,15 @@ package object
 
 import (
 	"cloud.google.com/go/storage"
+	"encoding/xml"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
+	uuid2 "github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"io"
 	"net/http"
+	"os"
 	s3_handler "sidecar/pkg/aws/handler/s3"
 	"sidecar/pkg/converter"
 	"sidecar/pkg/logging"
@@ -26,7 +30,91 @@ type Bucket interface {
 	GetParseInput(r *http.Request) (*s3.GetObjectInput, error)
 	PutHandle(writer http.ResponseWriter, request *http.Request)
 	PutParseInput(r *http.Request) (*s3manager.UploadInput, error)
+	MultiPartHandle(writer http.ResponseWriter, request *http.Request)
+	MultiPartParseInput(r *http.Request) (*s3.CreateMultipartUploadInput, error)
+	UploadPartHandle(writer http.ResponseWriter, request *http.Request)
+	UploadPartParseInput(r *http.Request) (*s3.UploadPartInput, error)
 	New(s3Handler *s3_handler.Handler) Handler
+}
+
+func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *http.Request) {
+	s3Req, _ := handler.UploadPartParseInput(request)
+	var resp *s3.UploadPartOutput
+	var err error
+	req := handler.S3Client.UploadPartRequest(s3Req)
+	resp, err = req.Send()
+	if err != nil {
+		writer.WriteHeader(404)
+		logging.Log.Error("Error %s", err)
+		writer.Write([]byte(string(fmt.Sprint(err))))
+		return
+	}
+	if header := resp.ETag; header != nil {
+		writer.Header().Set("ETag", *header)
+	}
+	writer.WriteHeader(200)
+	writer.Write([]byte(""))
+}
+func (handler *Handler) UploadPartParseInput(r *http.Request) (*s3.UploadPartInput, error) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	key := vars["key"]
+	partNumber, err := strconv.ParseInt(vars["partNumber"], 10, 64)
+	uploadId := vars["uploadId"]
+	return &s3.UploadPartInput{
+		Bucket: &bucket,
+		Key: &key,
+		PartNumber: &partNumber,
+		UploadId: &uploadId,
+		Body: ReaderWrapper{r.Body},
+	}, err
+}
+
+func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *http.Request){
+	s3Req, _ := handler.MultiPartParseInput(request)
+	var resp *s3.CreateMultipartUploadOutput
+	var err error
+	if handler.GCPClient != nil {
+		uuid := uuid2.New().String()
+		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), uuid)
+		f, fileErr := os.Create(path)
+		if fileErr != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s", err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
+		defer f.Close()
+		logging.Log.Info(uuid)
+		resp = &s3.CreateMultipartUploadOutput{
+			Key: s3Req.Key,
+			Bucket: s3Req.Bucket,
+			UploadId: &uuid,
+		}
+	} else {
+		req := handler.S3Client.CreateMultipartUploadRequest(s3Req)
+		resp, err = req.Send()
+	}
+	if err != nil {
+		writer.WriteHeader(404)
+		logging.Log.Error("Error %s", err)
+		writer.Write([]byte(string(fmt.Sprint(err))))
+		return
+	}
+	output, _ := xml.MarshalIndent(resp, "  ", "    ")
+	writer.Write([]byte(s3_handler.XmlHeader))
+	writer.Write([]byte(string(output)))
+}
+
+func (handler *Handler) MultiPartParseInput(r *http.Request) (*s3.CreateMultipartUploadInput, error) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	key := vars["key"]
+	s3Req := &s3.CreateMultipartUploadInput{
+		Bucket: &bucket,
+		Key:    &key,
+	}
+	return s3Req, nil
 }
 
 func (handler *Handler) PutParseInput(r *http.Request) (*s3manager.UploadInput, error) {

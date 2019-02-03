@@ -1,11 +1,24 @@
 package object
 
 import (
+	"errors"
 	"io"
 	"sidecar/pkg/logging"
 	"strconv"
 	"strings"
 )
+
+type ReaderWrapper struct {
+	Reader io.ReadCloser
+}
+
+func (wrapper ReaderWrapper) Seek(offset int64, whence int) (int64, error) {
+	return 0, errors.New("invalid operation")
+}
+
+func (wrapper ReaderWrapper) Read(p []byte) (n int, err error) {
+	return (wrapper.Reader).Read(p)
+}
 
 type ChunkedReaderWrapper struct {
 	Reader            *io.ReadCloser

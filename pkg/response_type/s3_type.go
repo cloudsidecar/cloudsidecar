@@ -119,3 +119,11 @@ type BucketContent struct {
 type BucketCommonPrefix struct {
 	Prefix string `xml:"Prefix"`
 }
+
+type InitiateMultipartUploadResult struct {
+	XMLName xml.Name `xml:"InitiateMultipartUploadResult"`
+	XmlNS string `xml:"xmlns,attr"`
+	Bucket *string `xml:"Bucket"`
+	Key *string `xml:"Key"`
+	UploadId *string `xml:"UploadId"`
+}
