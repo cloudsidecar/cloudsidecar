@@ -107,6 +107,17 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	return s3Resp
 }
 
+func GCSAttrToCombine(input *storage.ObjectAttrs) *response_type.CompleteMultipartUploadResult {
+	etag := base64.StdEncoding.EncodeToString(input.MD5)
+	location := fmt.Sprintf("http://%s.s3.amazonaws.com/%s", input.Bucket, input.Name)
+	return &response_type.CompleteMultipartUploadResult{
+		Bucket: &input.Bucket,
+		Key: &input.Name,
+		ETag: &etag,
+		Location: &location,
+	}
+}
+
 func GCSAttrToHeaders(input *storage.ObjectAttrs, writer http.ResponseWriter) {
 	writer.Header().Set("Content-Length", strconv.FormatInt(input.Size, 10))
 	if input.CacheControl != "" {
