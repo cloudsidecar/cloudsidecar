@@ -42,20 +42,53 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 	s3Req, _ := handler.UploadPartParseInput(request)
 	var resp *s3.UploadPartOutput
 	var err error
-	req := handler.S3Client.UploadPartRequest(s3Req)
-	req.HTTPRequest.Header.Set("Content-Length", request.Header.Get("Content-Length"))
-	req.HTTPRequest.Header.Set("X-Amz-Content-Sha256", request.Header.Get("X-Amz-Content-Sha256"))
-	req.Body = aws.ReadSeekCloser(request.Body)
-	resp, err = req.Send()
-	if err != nil {
-		writer.WriteHeader(404)
-		logging.Log.Error("Error in uploading %s", err)
-		writer.Write([]byte(string(fmt.Sprint(err))))
-		return
-	}
-	logging.Log.Info(fmt.Sprint(resp))
-	if header := resp.ETag; header != nil {
-		writer.Header().Set("ETag", *header)
+	if handler.GCPClient != nil {
+		key := fmt.Sprintf("%s-part-%d", *s3Req.Key, *s3Req.PartNumber)
+		uploader := handler.GCPClient.Bucket(*s3Req.Bucket).Object(key).NewWriter(*handler.Context)
+		gReq, _ := handler.PutParseInput(request)
+		_, err := converter.GCPUpload(gReq, uploader)
+		uploader.Close()
+		if err != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s\n", err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
+		attrs, _ := handler.GCPClient.Bucket(*s3Req.Bucket).Object(key).Attrs(*handler.Context)
+		converter.GCSAttrToHeaders(attrs, writer)
+		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
+		logging.Log.Info(path)
+		f, fileErr := os.Create(path)
+		if fileErr != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s", fileErr)
+			writer.Write([]byte(string(fmt.Sprint(fileErr))))
+			return
+		}
+		defer f.Close()
+		_, fileErr = f.WriteString(fmt.Sprintf("%s,%s\n", writer.Header().Get("ETag"), key))
+		if fileErr != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s", fileErr)
+			writer.Write([]byte(string(fmt.Sprint(fileErr))))
+			return
+		}
+	} else {
+		req := handler.S3Client.UploadPartRequest(s3Req)
+		req.HTTPRequest.Header.Set("Content-Length", request.Header.Get("Content-Length"))
+		req.HTTPRequest.Header.Set("X-Amz-Content-Sha256", request.Header.Get("X-Amz-Content-Sha256"))
+		req.Body = aws.ReadSeekCloser(request.Body)
+		resp, err = req.Send()
+		if err != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error in uploading %s", err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
+		logging.Log.Info(fmt.Sprint(resp))
+		if header := resp.ETag; header != nil {
+			writer.Header().Set("ETag", *header)
+		}
 	}
 	writer.WriteHeader(200)
 	writer.Write([]byte(""))
