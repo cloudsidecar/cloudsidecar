@@ -128,6 +128,17 @@ type InitiateMultipartUploadResult struct {
 	UploadId *string `xml:"UploadId"`
 }
 
+type MultipartPart struct {
+	ETag *string `xml:"ETag"`
+	PartNumber *int64 `xml:"PartNumber"`
+}
+
+type CompleteMultipartUploadInput struct {
+	XMLName xml.Name `xml:"CompleteMultipartUpload"`
+	XmlNS string `xml:"xmlns,attr"`
+	Parts []*MultipartPart `xml:"Part"`
+}
+
 type CompleteMultipartUploadResult struct {
 	XMLName xml.Name `xml:"CompleteMultipartUploadResult"`
 	XmlNS string `xml:"xmlns,attr"`

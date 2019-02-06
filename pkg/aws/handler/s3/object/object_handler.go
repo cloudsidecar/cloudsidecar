@@ -73,6 +73,12 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		req := handler.S3Client.CompleteMultipartUploadRequest(s3Req)
 		var s3Resp *s3.CompleteMultipartUploadOutput
 		s3Resp, err = req.Send()
+		if err != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s", err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		resp = &response_type.CompleteMultipartUploadResult{
 			Bucket: s3Resp.Bucket,
 			Key: s3Resp.Key,
@@ -100,6 +106,20 @@ func (handler *Handler) CompleteMultiPartParseInput(r *http.Request) (*s3.Comple
 		Bucket: &bucket,
 		Key:    &key,
 		UploadId: &uploadId,
+	}
+	bodyBytes := make([]byte, 64000)
+	io.ReadFull(r.Body, bodyBytes)
+	var input response_type.CompleteMultipartUploadInput
+	xml.Unmarshal(bodyBytes, &input)
+	logging.Log.Info("", input.Parts)
+	s3Req.MultipartUpload = &s3.CompletedMultipartUpload{
+		Parts: make([]s3.CompletedPart, len(input.Parts)),
+	}
+	for i, part := range input.Parts {
+		s3Req.MultipartUpload.Parts[i] = s3.CompletedPart{
+			ETag: part.ETag,
+			PartNumber: part.PartNumber,
+		}
 	}
 	return s3Req, nil
 }
