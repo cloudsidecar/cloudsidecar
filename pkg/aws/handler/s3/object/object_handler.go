@@ -1,7 +1,6 @@
 package object
 
 import (
-	"bufio"
 	"cloud.google.com/go/storage"
 	"encoding/xml"
 	"fmt"
@@ -17,13 +16,16 @@ import (
 	"sidecar/pkg/converter"
 	"sidecar/pkg/logging"
 	"sidecar/pkg/response_type"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type Handler struct {
 	*s3_handler.Handler
+	fileMutex sync.Mutex
 }
 
 type Bucket interface {
@@ -51,18 +53,30 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		f, fileErr := os.Open(path)
 		if fileErr != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", err)
+			logging.Log.Error("Error a %s", fileErr)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
 		defer f.Close()
-		scanner := bufio.NewScanner(f)
 		objects := make([]*storage.ObjectHandle, 0)
+		sort.Slice(s3Req.MultipartUpload.Parts, func(i, j int) bool {
+			return *s3Req.MultipartUpload.Parts[i].PartNumber < *s3Req.MultipartUpload.Parts[j].PartNumber
+		})
+		/*
+		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
 			pieces := strings.SplitN(scanner.Text(), ",", 2)
 			pieceKey := pieces[1]
 			objects = append(objects, handler.GCPClient.Bucket(*s3Req.Bucket).Object(pieceKey))
 		}
+		*/
+		for _, part := range s3Req.MultipartUpload.Parts {
+			partNumber := *part.PartNumber
+			key := partFileName(*s3Req.Key, partNumber)
+			logging.Log.Info("Part number ", partNumber, " ", key)
+			objects = append(objects, handler.GCPClient.Bucket(*s3Req.Bucket).Object(key))
+		}
+
 		gResp, _ := handler.GCPClient.Bucket(*s3Req.Bucket).Object(*s3Req.Key).ComposerFrom(objects...).Run(*handler.Context)
 		resp = converter.GCSAttrToCombine(gResp)
 		for _, object := range objects {
@@ -124,12 +138,16 @@ func (handler *Handler) CompleteMultiPartParseInput(r *http.Request) (*s3.Comple
 	return s3Req, nil
 }
 
+func partFileName(key string, part int64) string {
+	return fmt.Sprintf("%s-part-%d", key, part)
+}
+
 func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.UploadPartParseInput(request)
 	var resp *s3.UploadPartOutput
 	var err error
 	if handler.GCPClient != nil {
-		key := fmt.Sprintf("%s-part-%d", *s3Req.Key, *s3Req.PartNumber)
+		key := partFileName(*s3Req.Key, *s3Req.PartNumber)
 		uploader := handler.GCPClient.Bucket(*s3Req.Bucket).Object(key).NewWriter(*handler.Context)
 		gReq, _ := handler.PutParseInput(request)
 		_, err := converter.GCPUpload(gReq, uploader)
@@ -144,15 +162,18 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 		converter.GCSAttrToHeaders(attrs, writer)
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
 		logging.Log.Info(path)
+		handler.fileMutex.Lock()
 		f, fileErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 		if fileErr != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s", fileErr)
 			writer.Write([]byte(string(fmt.Sprint(fileErr))))
+			handler.fileMutex.Unlock()
 			return
 		}
 		defer f.Close()
 		_, fileErr = f.WriteString(fmt.Sprintf("%s,%s\n", writer.Header().Get("ETag"), key))
+		handler.fileMutex.Unlock()
 		if fileErr != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s", fileErr)
@@ -450,5 +471,5 @@ func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Req
 }
 
 func New(s3Handler *s3_handler.Handler) *Handler {
-	return &Handler{s3Handler}
+	return &Handler{s3Handler, sync.Mutex{}}
 }
