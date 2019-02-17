@@ -52,6 +52,27 @@ func GCPUpload(input *s3manager.UploadInput, writer *storage.Writer) (int64, err
 	return bytes, nil
 }
 
+func GCSListResponseObjectsToAWS(contents []*response_type.BucketContent, listRequest *s3.ListObjectsInput, nextToken string, contentI int, prefixI int, prefixes []*response_type.BucketCommonPrefix) *response_type.AWSListBucketResponse{
+	isTruncated := nextToken != ""
+	s3Resp := &response_type.AWSListBucketResponse{
+		XmlNS: "http://s3.amazonaws.com/doc/2006-03-01/",
+		Name: listRequest.Bucket,
+		Prefix: listRequest.Prefix,
+		Delimiter: nil,
+		KeyCount: int64(contentI + prefixI),
+		MaxKeys: listRequest.MaxKeys,
+		IsTruncated: &isTruncated,
+		Contents: contents,
+		CommonPrefixes: prefixes,
+		ContinuationToken: listRequest.Marker,
+		NextContinuationToken: &nextToken,
+	}
+	if listRequest.Delimiter != nil && *listRequest.Delimiter != "" {
+		s3Resp.Delimiter = listRequest.Delimiter
+	}
+	return s3Resp
+}
+
 func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput) *response_type.AWSListBucketResponse {
 
 	contentI := 0
@@ -87,23 +108,7 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 			prefixI++
 		}
 	}
-	isTruncated := nextToken != ""
-	s3Resp := &response_type.AWSListBucketResponse{
-		XmlNS: "http://s3.amazonaws.com/doc/2006-03-01/",
-		Name: listRequest.Bucket,
-		Prefix: listRequest.Prefix,
-		Delimiter: nil,
-		KeyCount: int64(contentI + prefixI),
-		MaxKeys: listRequest.MaxKeys,
-		IsTruncated: &isTruncated,
-		Contents: contents,
-		CommonPrefixes: prefixes,
-		ContinuationToken: listRequest.Marker,
-		NextContinuationToken: &nextToken,
-	}
-	if listRequest.Delimiter != nil && *listRequest.Delimiter != "" {
-		s3Resp.Delimiter = listRequest.Delimiter
-	}
+	s3Resp := GCSListResponseObjectsToAWS(contents, listRequest, nextToken, contentI, prefixI, prefixes)
 	return s3Resp
 }
 

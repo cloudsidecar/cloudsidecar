@@ -18,7 +18,6 @@ type Handler struct {
 
 type GCPClient interface {
 	Bucket(name string) *storage.BucketHandle
-	//Bucket(name string) GCPBucket
 }
 
 type GCPBucket interface {
@@ -33,7 +32,6 @@ type GCPBucket interface {
 	UserProject(projectID string) *storage.BucketHandle
 	LockRetentionPolicy(ctx context.Context) error
 	Objects(ctx context.Context, q *storage.Query) *storage.ObjectIterator
-
 }
 
 type HandlerInterface interface {
@@ -73,14 +71,18 @@ func (handler *Handler) SetConfig(config *viper.Viper) {
 }
 
 func (handler *Handler) BucketRename(bucket string) string {
-	renameMap := handler.Config.GetStringMapString("gcp_destination_config.gcs_config.bucket_rename")
-	bucket = strings.Replace(bucket, ".",  "__dot__",  -1)
-	if renameMap != nil {
-		if val, ok := renameMap[bucket]; ok {
-			return val
+	if handler.Config != nil {
+		renameMap := handler.Config.GetStringMapString("gcp_destination_config.gcs_config.bucket_rename")
+		bucket = strings.Replace(bucket, ".",  "__dot__",  -1)
+		if renameMap != nil {
+			if val, ok := renameMap[bucket]; ok {
+				return val
+			}
 		}
+		return bucket
+	} else {
+		return bucket
 	}
-	return bucket
 }
 
 const (

@@ -3,6 +3,7 @@ package bucket
 import (
 	"cloud.google.com/go/storage"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/mux"
@@ -39,6 +40,9 @@ func New(s3Handler *s3_handler.Handler) *Handler {
 func (wrapper *Handler) ListParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
 	vars := mux.Vars(request)
 	bucket := vars["bucket"]
+	if bucket == "" {
+		return nil, errors.New("no bucket present")
+	}
 	listRequest := &s3.ListObjectsInput{Bucket: &bucket}
 	delim := request.URL.Query().Get("delimiter")
 	listRequest.Delimiter = &delim
@@ -68,6 +72,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 	if err != nil {
 		writer.WriteHeader(400)
 		writer.Write([]byte(fmt.Sprint(err)))
+		return
 	}
 	bucket := *input.Bucket
 	var response *response_type.AWSListBucketResponse
