@@ -468,6 +468,7 @@
     "github.com/aws/aws-sdk-go-v2/service/dynamodb",
     "github.com/aws/aws-sdk-go-v2/service/kinesis",
     "github.com/aws/aws-sdk-go-v2/service/s3",
+    "github.com/aws/aws-sdk-go-v2/service/s3/s3iface",
     "github.com/aws/aws-sdk-go-v2/service/s3/s3manager",
     "github.com/fsnotify/fsnotify",
     "github.com/google/uuid",

@@ -3,33 +3,54 @@ package s3
 import (
 	"cloud.google.com/go/storage"
 	"context"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/s3iface"
 	"github.com/spf13/viper"
 	"strings"
 )
 
 type Handler struct {
-	S3Client *s3.S3
-	GCPClient *storage.Client
+	S3Client s3iface.S3API
+	GCPClient GCPClient
 	Context *context.Context
 	Config *viper.Viper
+	BucketToClient func(bucket string, client GCPClient) GCPBucket
+}
+
+type GCPClient interface {
+	Bucket(name string) *storage.BucketHandle
+	//Bucket(name string) GCPBucket
+}
+
+type GCPBucket interface {
+	Create(ctx context.Context, projectID string, attrs *storage.BucketAttrs) (err error)
+	Delete(ctx context.Context) (err error)
+	ACL() *storage.ACLHandle
+	DefaultObjectACL() *storage.ACLHandle
+	Object(name string) *storage.ObjectHandle
+	Attrs(ctx context.Context) (attrs *storage.BucketAttrs, err error)
+	Update(ctx context.Context, uattrs storage.BucketAttrsToUpdate) (attrs *storage.BucketAttrs, err error)
+	If(conds storage.BucketConditions) *storage.BucketHandle
+	UserProject(projectID string) *storage.BucketHandle
+	LockRetentionPolicy(ctx context.Context) error
+	Objects(ctx context.Context, q *storage.Query) *storage.ObjectIterator
+
 }
 
 type HandlerInterface interface {
-	GetS3Client() *s3.S3
-	GetGCPClient() *storage.Client
+	GetS3Client() s3iface.S3API
+	GetGCPClient() GCPClient
 	GetContext() *context.Context
 	GetConfig() *viper.Viper
-	SetS3Client(s3Client *s3.S3)
-	SetGCPClient(gcpClient *storage.Client)
+	SetS3Client(s3Client s3iface.S3API)
+	SetGCPClient(gcpClient GCPClient)
 	SetContext(context *context.Context)
 	SetConfig(config *viper.Viper)
 }
 
-func (handler *Handler) GetS3Client() *s3.S3 {
+func (handler *Handler) GetS3Client() s3iface.S3API {
 	return handler.S3Client
 }
-func (handler *Handler) GetGCPClient() *storage.Client {
+func (handler *Handler) GetGCPClient() GCPClient {
 	return handler.GCPClient
 }
 func (handler *Handler) GetContext() *context.Context{
@@ -38,10 +59,10 @@ func (handler *Handler) GetContext() *context.Context{
 func (handler *Handler) GetConfig() *viper.Viper {
 	return handler.Config
 }
-func (handler *Handler) SetS3Client(s3Client *s3.S3){
+func (handler *Handler) SetS3Client(s3Client s3iface.S3API){
 	handler.S3Client = s3Client
 }
-func (handler *Handler) SetGCPClient(gcpClient *storage.Client) {
+func (handler *Handler) SetGCPClient(gcpClient GCPClient) {
 	handler.GCPClient = gcpClient
 }
 func (handler *Handler) SetContext(context *context.Context) {

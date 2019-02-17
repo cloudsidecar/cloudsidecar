@@ -78,6 +78,9 @@ func Main(cmd *cobra.Command, args []string) {
 			handler := s3handler.Handler{
 				S3Client: svc,
 				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
+				BucketToClient: func(bucket string, client s3handler.GCPClient) s3handler.GCPBucket {
+					return client.Bucket(bucket)
+				},
 			}
 			if awsConfig.DestinationGCPConfig != nil {
 				ctx := context.Background()
