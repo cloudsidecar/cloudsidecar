@@ -66,6 +66,7 @@ BigtableDataClient.create(settings).readRow("aaa", "bbb")
 ```
 
 ## Installing and compiling
+Requires [dep](https://github.com/golang/dep)
 Just run clone and run `dep ensure` to get dependencies. run `go build main.go` to compile.
 
 ## Configure
