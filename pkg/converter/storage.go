@@ -16,6 +16,10 @@ import (
 	"time"
 )
 
+type Writer interface {
+	Write(p []byte) (n int, err error)
+}
+
 func gcpPermissionToAWS(role storage.ACLRole) string {
 	if role == storage.RoleOwner {
 		return string(s3.PermissionFullControl)
@@ -26,7 +30,7 @@ func gcpPermissionToAWS(role storage.ACLRole) string {
 	}
 }
 
-func GCPUpload(input *s3manager.UploadInput, writer *storage.Writer) (int64, error) {
+func GCPUpload(input *s3manager.UploadInput, writer Writer) (int64, error) {
 	reader := input.Body
 	buffer := make([]byte, 4096)
 	var bytes int64
@@ -73,8 +77,27 @@ func GCSListResponseObjectsToAWS(contents []*response_type.BucketContent, listRe
 	return s3Resp
 }
 
-func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput) *response_type.AWSListBucketResponse {
+func GCSItemToContent(item *storage.ObjectAttrs) *response_type.BucketContent {
+	utc, _ := time.LoadLocation("UTC")
+	lastModified := item.Updated.In(utc)
+	other := base64.StdEncoding.EncodeToString(item.MD5)
+	return &response_type.BucketContent{
+		Key: item.Name,
+		LastModified: lastModified.Format("2006-01-02T15:04:05.000Z"),
+		// ETag: fmt.Sprintf("%x", item.MD5[:]),
+		ETag: other,
+		Size: item.Size,
+		StorageClass: item.StorageClass,
+	}
+}
 
+func GCSItemToPrefix(item *storage.ObjectAttrs) *response_type.BucketCommonPrefix {
+	return &response_type.BucketCommonPrefix{
+		Prefix: item.Prefix,
+	}
+}
+
+func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput) *response_type.AWSListBucketResponse {
 	contentI := 0
 	prefixI := 0
 	var pageResponse []*storage.ObjectAttrs
@@ -89,22 +112,11 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	var contents = make([]*response_type.BucketContent, len(pageResponse))
 	var prefixes = make([]*response_type.BucketCommonPrefix, len(pageResponse))
 	for _, item := range pageResponse {
-		lastModified := item.Updated
 		if item.Name != "" {
-			other := base64.StdEncoding.EncodeToString(item.MD5)
-			contents[contentI] = &response_type.BucketContent{
-				Key: item.Name,
-				LastModified: lastModified.Format("2006-01-02T15:04:05.000Z"),
-				// ETag: fmt.Sprintf("%x", item.MD5[:]),
-				ETag: other,
-				Size: item.Size,
-				StorageClass: item.StorageClass,
-			}
+			contents[contentI] = GCSItemToContent(item)
 			contentI++
 		} else {
-			prefixes[prefixI] = &response_type.BucketCommonPrefix{
-				Prefix: item.Prefix,
-			}
+			prefixes[prefixI] = GCSItemToPrefix(item)
 			prefixI++
 		}
 	}
