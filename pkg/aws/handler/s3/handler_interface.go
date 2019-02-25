@@ -9,15 +9,34 @@ import (
 )
 
 type Handler struct {
-	S3Client s3iface.S3API
-	GCPClient GCPClient
-	Context *context.Context
-	Config *viper.Viper
-	BucketToClient func(bucket string, client GCPClient) GCPBucket
+	S3Client          s3iface.S3API
+	GCPClient         GCPClient
+	Context           *context.Context
+	Config            *viper.Viper
+	GCPClientToBucket func(bucket string, client GCPClient) GCPBucket
+	GCPBucketToObject func(name string, bucket GCPBucket) GCPObject
 }
 
 type GCPClient interface {
 	Bucket(name string) *storage.BucketHandle
+}
+
+type GCPObject interface {
+	ACL() *storage.ACLHandle
+	Generation(gen int64) *storage.ObjectHandle
+	If(conds storage.Conditions) *storage.ObjectHandle
+	Key(encryptionKey []byte) *storage.ObjectHandle
+	Attrs(ctx context.Context) (attrs *storage.ObjectAttrs, err error)
+	Update(ctx context.Context, uattrs storage.ObjectAttrsToUpdate) (oa *storage.ObjectAttrs, err error)
+	BucketName() string
+	ObjectName() string
+	Delete(ctx context.Context) error
+	ReadCompressed(compressed bool) *storage.ObjectHandle
+	NewWriter(ctx context.Context) *storage.Writer
+	NewReader(ctx context.Context) (*storage.Reader, error)
+	NewRangeReader(ctx context.Context, offset, length int64) (r *storage.Reader, err error)
+	CopierFrom(src *storage.ObjectHandle) *storage.Copier
+	ComposerFrom(srcs ...*storage.ObjectHandle) *storage.Composer
 }
 
 type GCPBucket interface {

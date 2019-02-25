@@ -79,7 +79,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 	if wrapper.GCPClient != nil {
 		bucket = wrapper.BucketRename(bucket)
 		//bucketObject := wrapper.GCPClient.Bucket(bucket)
-		bucketObject := wrapper.BucketToClient(bucket, wrapper.GCPClient)
+		bucketObject := wrapper.GCPClientToBucket(bucket, wrapper.GCPClient)
 		it := bucketObject.Objects(*wrapper.Context, &storage.Query{
 			Delimiter: *input.Delimiter,
 			Prefix: *input.Prefix,
@@ -143,7 +143,7 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 	input, _ := wrapper.ACLParseInput(request)
 	if wrapper.GCPClient != nil {
 		bucket := wrapper.BucketRename(*input.Bucket)
-		acl := wrapper.BucketToClient(bucket, wrapper.GCPClient).ACL()
+		acl := wrapper.GCPClientToBucket(bucket, wrapper.GCPClient).ACL()
 		aclList, err := acl.List(*wrapper.Context)
 		if err != nil {
 			logging.Log.Error("Error with GCP %s", err)

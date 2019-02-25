@@ -70,14 +70,15 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 			objects = append(objects, handler.GCPClient.Bucket(*s3Req.Bucket).Object(pieceKey))
 		}
 		*/
+		bucket := handler.GCPClientToBucket(*s3Req.Bucket, handler.GCPClient)
 		for _, part := range s3Req.MultipartUpload.Parts {
 			partNumber := *part.PartNumber
 			key := partFileName(*s3Req.Key, partNumber)
 			logging.Log.Info("Part number ", partNumber, " ", key)
-			objects = append(objects, handler.BucketToClient(*s3Req.Bucket, handler.GCPClient).Object(key))
+			objects = append(objects, bucket.Object(key))
 		}
 
-		gResp, _ := handler.BucketToClient(*s3Req.Bucket, handler.GCPClient).Object(*s3Req.Key).ComposerFrom(objects...).Run(*handler.Context)
+		gResp, _ := handler.GCPBucketToObject(*s3Req.Key, bucket).ComposerFrom(objects...).Run(*handler.Context)
 		resp = converter.GCSAttrToCombine(gResp)
 		for _, object := range objects {
 			object.Delete(*handler.Context)
@@ -148,7 +149,8 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 	var err error
 	if handler.GCPClient != nil {
 		key := partFileName(*s3Req.Key, *s3Req.PartNumber)
-		uploader := handler.BucketToClient(*s3Req.Bucket, handler.GCPClient).Object(key).NewWriter(*handler.Context)
+		bucket := handler.GCPClientToBucket(*s3Req.Bucket, handler.GCPClient)
+		uploader := handler.GCPBucketToObject(key, bucket).NewWriter(*handler.Context)
 		gReq, _ := handler.PutParseInput(request)
 		_, err := converter.GCPUpload(gReq, uploader)
 		uploader.Close()
@@ -158,7 +160,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
-		attrs, _ := handler.BucketToClient(*s3Req.Bucket, handler.GCPClient).Object(key).Attrs(*handler.Context)
+		attrs, _ := handler.GCPBucketToObject(key, bucket).Attrs(*handler.Context)
 		converter.GCSAttrToHeaders(attrs, writer)
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
 		logging.Log.Info(path)
@@ -305,7 +307,8 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 	defer request.Body.Close()
 	if handler.GCPClient != nil {
 		bucket := handler.BucketRename(*s3Req.Bucket)
-		uploader := handler.BucketToClient(bucket, handler.GCPClient).Object(*s3Req.Key).NewWriter(*handler.Context)
+		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).NewWriter(*handler.Context)
 		defer uploader.Close()
 		_, err := converter.GCPUpload(s3Req, uploader)
 		if err != nil {
@@ -337,7 +340,8 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 	}
 	if handler.GCPClient != nil {
 		bucket := handler.BucketRename(*input.Bucket)
-		objHandle := handler.BucketToClient(bucket, handler.GCPClient).Object(*input.Key)
+		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		objHandle := handler.GCPBucketToObject(*input.Key, bucketHandle)
 		attrs, err := objHandle.Attrs(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
@@ -427,7 +431,8 @@ func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Req
 	input, _ := handler.HeadParseInput(request)
 	if handler.GCPClient != nil {
 		bucket := handler.BucketRename(*input.Bucket)
-		resp, err := handler.BucketToClient(bucket, handler.GCPClient).Object(*input.Key).Attrs(*handler.Context)
+		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		resp, err := handler.GCPBucketToObject(*input.Key, bucketHandle).Attrs(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s", err)

@@ -36,7 +36,7 @@ func TestHandler_ACLHandle(t *testing.T) {
 	ctx := context.Background()
 	s3Handler := &s3_handler.Handler{
 		GCPClient: clientMock,
-		BucketToClient: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
+		GCPClientToBucket: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
 			return bucketMock
 		},
 		Context: &ctx,
@@ -87,7 +87,7 @@ func TestHandler_ListHandle_NoBucket(t *testing.T) {
 	writerMock := mock.NewMockResponseWriter(ctrl)
 	s3Handler := &s3_handler.Handler{
 		GCPClient: nil,
-		BucketToClient: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
+		GCPClientToBucket: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
 			return bucketMock
 		},
 	}
@@ -108,7 +108,7 @@ func TestHandler_ListHandle_Success(t *testing.T) {
 	ctx := context.Background()
 	s3Handler := &s3_handler.Handler{
 		GCPClient: clientMock,
-		BucketToClient: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
+		GCPClientToBucket: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
 			return bucketMock
 		},
 		Context: &ctx,
