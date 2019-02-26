@@ -141,13 +141,14 @@ func GCSAttrToHeaders(input *storage.ObjectAttrs, writer http.ResponseWriter) {
 		writer.Header().Set("Cache-Control", input.CacheControl)
 	}
 	if input.ContentType != "" {
-		writer.Header().Set("Cache-Type", input.ContentType)
+		writer.Header().Set("Content-Type", input.ContentType)
 	}
 	if len(input.MD5) > 0 {
 		other := base64.StdEncoding.EncodeToString(input.MD5)
 		writer.Header().Set("ETag", other)
 	}
-	lastMod := input.Updated.Format(time.RFC1123)
+	utc, _ := time.LoadLocation("UTC")
+	lastMod := input.Updated.In(utc).Format(time.RFC1123)
 	lastMod = strings.Replace(lastMod, "UTC", "GMT", 1)
 	writer.Header().Set("Last-Modified", lastMod)
 }

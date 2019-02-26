@@ -349,7 +349,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 			return
 		}
 		converter.GCSAttrToHeaders(attrs, writer)
-		var reader *storage.Reader
+		var reader s3_handler.GCPReader
 		var readerError error
 		if input.Range != nil {
 			equalSplit := strings.SplitN(*input.Range, "=", 2)

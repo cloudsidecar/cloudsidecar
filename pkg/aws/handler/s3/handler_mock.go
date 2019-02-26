@@ -230,7 +230,7 @@ func (mr *MockGCPObjectMockRecorder) NewWriter(ctx interface{}) *gomock.Call {
 }
 
 // NewReader mocks base method
-func (m *MockGCPObject) NewReader(ctx context.Context) (*storage.Reader, error) {
+func (m *MockGCPObject) NewReader(ctx context.Context) (GCPReader, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewReader", ctx)
 	ret0, _ := ret[0].(*storage.Reader)
@@ -245,7 +245,7 @@ func (mr *MockGCPObjectMockRecorder) NewReader(ctx interface{}) *gomock.Call {
 }
 
 // NewRangeReader mocks base method
-func (m *MockGCPObject) NewRangeReader(ctx context.Context, offset, length int64) (*storage.Reader, error) {
+func (m *MockGCPObject) NewRangeReader(ctx context.Context, offset, length int64) (GCPReader, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewRangeReader", ctx, offset, length)
 	ret0, _ := ret[0].(*storage.Reader)

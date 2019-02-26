@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3iface"
 	"github.com/spf13/viper"
 	"strings"
+	"time"
 )
 
 type Handler struct {
@@ -33,10 +34,21 @@ type GCPObject interface {
 	Delete(ctx context.Context) error
 	ReadCompressed(compressed bool) *storage.ObjectHandle
 	NewWriter(ctx context.Context) *storage.Writer
-	NewReader(ctx context.Context) (*storage.Reader, error)
-	NewRangeReader(ctx context.Context, offset, length int64) (r *storage.Reader, err error)
+	NewReader(ctx context.Context) (GCPReader, error)
+	NewRangeReader(ctx context.Context, offset, length int64) (r GCPReader, err error)
 	CopierFrom(src *storage.ObjectHandle) *storage.Copier
 	ComposerFrom(srcs ...*storage.ObjectHandle) *storage.Composer
+}
+
+type GCPReader interface {
+	Close() error
+	Read(p []byte) (int, error)
+	Size() int64
+	Remain() int64
+	ContentType() string
+	ContentEncoding() string
+	CacheControl() string
+	LastModified() (time.Time, error)
 }
 
 type GCPBucket interface {
