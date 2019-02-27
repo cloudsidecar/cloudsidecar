@@ -43,6 +43,8 @@ type Bucket interface {
 	CompleteMultiPartParseInput(r *http.Request) (*s3.CompleteMultipartUploadInput, error)
 	CopyHandle(writer http.ResponseWriter, request *http.Request)
 	CopyParseInput(r *http.Request) (*s3.CopyObjectInput, error)
+	DeleteHandle(writer http.ResponseWriter, request *http.Request)
+	DeleteParseInput(r *http.Request) (*s3.DeleteObjectInput, error)
 	New(s3Handler *s3_handler.Handler) Handler
 }
 
@@ -536,6 +538,41 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 	output, _ := xml.MarshalIndent(copyResult, "  ", "    ")
 	writer.Write([]byte(s3_handler.XmlHeader))
 	writer.Write([]byte(string(output)))
+}
+
+func (handler *Handler) DeleteParseInput(r *http.Request) (*s3.DeleteObjectInput, error) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	key := vars["key"]
+	s3Req := &s3.DeleteObjectInput{
+		Bucket: &bucket,
+		Key: &key,
+	}
+	return s3Req, nil
+}
+
+func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.Request){
+	s3Req, _ := handler.DeleteParseInput(request)
+	if handler.GCPClient != nil {
+		bucket := handler.BucketRename(*s3Req.Bucket)
+		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		objectHandle := handler.GCPBucketToObject(*s3Req.Key, bucketHandle)
+		err := objectHandle.Delete(*handler.Context)
+		if err != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s\n", err)
+			return
+		}
+	} else {
+		req := handler.S3Client.DeleteObjectRequest(s3Req)
+		_, err := req.Send()
+		if err != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s", err)
+			return
+		}
+	}
+	writer.WriteHeader(200)
 }
 
 func New(s3Handler *s3_handler.Handler) *Handler {

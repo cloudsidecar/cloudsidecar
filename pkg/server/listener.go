@@ -108,6 +108,7 @@ func Main(cmd *cobra.Command, args []string) {
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.CompleteMultiPartHandle).Queries("uploadId", "{uploadId}").Methods("POST")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.CopyHandle).Headers("x-amz-copy-source", "").Methods("PUT")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.PutHandle).Methods("PUT")
+			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.DeleteHandle).Methods("DELETE")
 		} else if awsConfig.ServiceType == "kinesis" {
 			svc := kinesis.New(configs)
 			handler := kinesishandler.Handler{
