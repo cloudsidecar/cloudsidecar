@@ -153,3 +153,26 @@ type CopyResult struct {
 	LastModified string `xml:"LastModified"`
 	ETag string `xml:"ETag"`
 }
+
+type DeleteObject struct {
+	Key *string `xml:"Key"`
+}
+
+type MultiDeleteRequest struct {
+	XMLName xml.Name `xml:"Delete"`
+	Quiet *bool `xml:"Bucket"`
+	Objects []*DeleteObject `xml:"Object"`
+}
+
+type MultiDeleteResult struct {
+	XMLName xml.Name `xml:"DeleteResult"`
+	XmlNS string `xml:"xmlns,attr"`
+	Objects []*DeleteObject `xml:"Deleted"`
+	Errors []*ErrorResult `xml:"Error"`
+}
+
+type ErrorResult struct {
+	Key *string `xml:"Key"`
+	Code *string `xml:"Code"`
+	Message *string `xml:"Message"`
+}

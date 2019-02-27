@@ -45,6 +45,8 @@ type Bucket interface {
 	CopyParseInput(r *http.Request) (*s3.CopyObjectInput, error)
 	DeleteHandle(writer http.ResponseWriter, request *http.Request)
 	DeleteParseInput(r *http.Request) (*s3.DeleteObjectInput, error)
+	MultiDeleteHandle(writer http.ResponseWriter, request *http.Request)
+	MultiDeleteParseInput(r *http.Request) (*s3.DeleteObjectsInput, error)
 	New(s3Handler *s3_handler.Handler) Handler
 }
 
@@ -573,6 +575,99 @@ func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.R
 		}
 	}
 	writer.WriteHeader(200)
+}
+
+func (handler *Handler) MultiDeleteParseInput(r *http.Request) (*s3.DeleteObjectsInput, error) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	bodyBytes := make([]byte, length)
+	_, err = io.ReadFull(r.Body, bodyBytes)
+	if err != nil {
+		return nil, err
+	}
+	var input response_type.MultiDeleteRequest
+	err = xml.Unmarshal(bodyBytes, &input)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]s3.ObjectIdentifier, len(input.Objects))
+	for i, key := range input.Objects {
+		keys[i] = s3.ObjectIdentifier{
+			Key: key.Key,
+		}
+	}
+	s3Req := &s3.DeleteObjectsInput{
+		Bucket: &bucket,
+		Delete: &s3.Delete{
+			Objects: keys,
+		},
+	}
+	return s3Req, nil
+}
+
+func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *http.Request){
+	s3Req, _ := handler.MultiDeleteParseInput(request)
+	response := response_type.MultiDeleteResult{
+	}
+	if handler.GCPClient != nil {
+		bucket := handler.BucketRename(*s3Req.Bucket)
+		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		deletedKeys := make([]*string, 0)
+		failedKeys := make([]*string, 0)
+		for _, obj := range s3Req.Delete.Objects {
+			err := bucketHandle.Object(*obj.Key).Delete(*handler.Context)
+			if err != nil {
+				failedKeys = append(failedKeys, obj.Key)
+			} else {
+				deletedKeys = append(deletedKeys, obj.Key)
+			}
+		}
+		deletedObjects := make([]*response_type.DeleteObject, len(deletedKeys))
+		for i, obj := range deletedKeys {
+			deletedObjects[i] = &response_type.DeleteObject{
+				Key: obj,
+			}
+		}
+		response.Objects = deletedObjects
+		failedObjects := make([]*response_type.ErrorResult, len(failedKeys))
+		for i, obj := range failedKeys {
+			failedObjects[i] = &response_type.ErrorResult{
+				Key: obj,
+			}
+		}
+		response.Errors = failedObjects
+	} else {
+		req := handler.S3Client.DeleteObjectsRequest(s3Req)
+		resp, err := req.Send()
+		if err != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s", err)
+			return
+		}
+		deletedObjects := make([]*response_type.DeleteObject, len(resp.Deleted))
+		for i, obj := range resp.Deleted {
+			deletedObjects[i] = &response_type.DeleteObject{
+				Key: obj.Key,
+			}
+		}
+		response.Objects = deletedObjects
+		failedObjects := make([]*response_type.ErrorResult, len(resp.Errors))
+		for i, obj := range resp.Errors {
+			failedObjects[i] = &response_type.ErrorResult{
+				Key: obj.Key,
+				Code: obj.Code,
+				Message: obj.Message,
+			}
+		}
+		response.Errors = failedObjects
+	}
+	output, _ := xml.MarshalIndent(response, "  ", "    ")
+	writer.Write([]byte(s3_handler.XmlHeader))
+	writer.Write([]byte(string(output)))
 }
 
 func New(s3Handler *s3_handler.Handler) *Handler {

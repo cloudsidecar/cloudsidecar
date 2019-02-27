@@ -103,6 +103,7 @@ func Main(cmd *cobra.Command, args []string) {
 			r.HandleFunc("/{bucket}/", bucketHandler.ListHandle).Methods("GET")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.HeadHandle).Methods("HEAD")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.GetHandle).Methods("GET")
+			r.HandleFunc("/{bucket}", objectHandler.MultiDeleteHandle).Queries("delete", "").Methods("POST")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.MultiPartHandle).Queries("uploads", "").Methods("POST")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.UploadPartHandle).Queries("partNumber", "{partNumber}", "uploadId", "{uploadId}").Methods("PUT")
 			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.CompleteMultiPartHandle).Queries("uploadId", "{uploadId}").Methods("POST")
