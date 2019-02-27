@@ -78,12 +78,11 @@ func GCSListResponseObjectsToAWS(contents []*response_type.BucketContent, listRe
 }
 
 func GCSItemToContent(item *storage.ObjectAttrs) *response_type.BucketContent {
-	utc, _ := time.LoadLocation("UTC")
-	lastModified := item.Updated.In(utc)
+	lastModified := FormatTimeZulu(&item.Updated)
 	other := MD5toEtag(item.MD5)
 	return &response_type.BucketContent{
 		Key: item.Name,
-		LastModified: lastModified.Format("2006-01-02T15:04:05.000Z"),
+		LastModified: lastModified,
 		// ETag: fmt.Sprintf("%x", item.MD5[:]),
 		ETag: other,
 		Size: item.Size,
@@ -189,14 +188,14 @@ func MD5toEtag(input []byte) string {
 	return base64.StdEncoding.EncodeToString(input)
 }
 
-func FormatTimeFromCopy(input *time.Time) string {
+func FormatTimeZulu(input *time.Time) string {
 	utc, _ := time.LoadLocation("UTC")
-	return input.In(utc).Format("2006-01-02T15:04:05")
+	return input.In(utc).Format("2006-01-02T15:04:05.000Z")
 }
 
 func GCSCopyResponseToAWS(input *storage.ObjectAttrs) response_type.CopyResult {
 	return response_type.CopyResult{
-		LastModified: FormatTimeFromCopy(&input.Updated),
-		ETag: MD5toEtag(input.MD5),
+		LastModified: FormatTimeZulu(&input.Updated),
+		ETag:         MD5toEtag(input.MD5),
 	}
 }

@@ -529,7 +529,7 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 			return
 		}
 		copyResult = response_type.CopyResult{
-			LastModified: converter.FormatTimeFromCopy(result.CopyObjectResult.LastModified),
+			LastModified: converter.FormatTimeZulu(result.CopyObjectResult.LastModified),
 			ETag: *result.CopyObjectResult.ETag,
 		}
 	}
