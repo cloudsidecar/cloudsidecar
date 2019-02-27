@@ -80,7 +80,7 @@ func GCSListResponseObjectsToAWS(contents []*response_type.BucketContent, listRe
 func GCSItemToContent(item *storage.ObjectAttrs) *response_type.BucketContent {
 	utc, _ := time.LoadLocation("UTC")
 	lastModified := item.Updated.In(utc)
-	other := base64.StdEncoding.EncodeToString(item.MD5)
+	other := MD5toEtag(item.MD5)
 	return &response_type.BucketContent{
 		Key: item.Name,
 		LastModified: lastModified.Format("2006-01-02T15:04:05.000Z"),
@@ -125,7 +125,7 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 }
 
 func GCSAttrToCombine(input *storage.ObjectAttrs) *response_type.CompleteMultipartUploadResult {
-	etag := base64.StdEncoding.EncodeToString(input.MD5)
+	etag := MD5toEtag(input.MD5)
 	location := fmt.Sprintf("http://%s.s3.amazonaws.com/%s", input.Bucket, input.Name)
 	return &response_type.CompleteMultipartUploadResult{
 		Bucket: &input.Bucket,
@@ -144,7 +144,7 @@ func GCSAttrToHeaders(input *storage.ObjectAttrs, writer http.ResponseWriter) {
 		writer.Header().Set("Cache-Type", input.ContentType)
 	}
 	if len(input.MD5) > 0 {
-		other := base64.StdEncoding.EncodeToString(input.MD5)
+		other := MD5toEtag(input.MD5)
 		writer.Header().Set("ETag", other)
 	}
 	lastMod := input.Updated.Format(time.RFC1123)
@@ -183,4 +183,20 @@ func GCSACLResponseToAWS(input []storage.ACLRule) response_type.AWSACLResponse {
 		Grants: grants,
 	}
 	return response
+}
+
+func MD5toEtag(input []byte) string {
+	return base64.StdEncoding.EncodeToString(input)
+}
+
+func FormatTimeFromCopy(input *time.Time) string {
+	utc, _ := time.LoadLocation("UTC")
+	return input.In(utc).Format("2006-01-02T15:04:05")
+}
+
+func GCSCopyResponseToAWS(input *storage.ObjectAttrs) response_type.CopyResult {
+	return response_type.CopyResult{
+		LastModified: FormatTimeFromCopy(&input.Updated),
+		ETag: MD5toEtag(input.MD5),
+	}
 }

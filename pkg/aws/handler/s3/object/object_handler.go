@@ -41,6 +41,8 @@ type Bucket interface {
 	UploadPartParseInput(r *http.Request) (*s3.UploadPartInput, error)
 	CompleteMultiPartHandle(writer http.ResponseWriter, request *http.Request)
 	CompleteMultiPartParseInput(r *http.Request) (*s3.CompleteMultipartUploadInput, error)
+	CopyHandle(writer http.ResponseWriter, request *http.Request)
+	CopyParseInput(r *http.Request) (*s3.CopyObjectInput, error)
 	New(s3Handler *s3_handler.Handler) Handler
 }
 
@@ -312,13 +314,17 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 		defer uploader.Close()
 		_, err := converter.GCPUpload(s3Req, uploader)
 		if err != nil {
+			writer.WriteHeader(404)
 			logging.Log.Error("Error %s\n", err)
+			return
 		}
 	} else {
 		uploader := s3manager.NewUploaderWithClient(handler.S3Client)
 		_, err = uploader.Upload(s3Req)
 		if err != nil {
+			writer.WriteHeader(404)
 			logging.Log.Error("Error %s", err)
+			return
 		}
 	}
 	writer.WriteHeader(200)
@@ -473,6 +479,63 @@ func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Req
 	}
 	writer.WriteHeader(200)
 	return
+}
+
+func (handler *Handler) CopyParseInput(r *http.Request) (*s3.CopyObjectInput, error) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	key := vars["key"]
+	source := r.Header.Get("x-amz-copy-source")
+	s3Req := &s3.CopyObjectInput{
+		Bucket: &bucket,
+		Key: &key,
+		CopySource: &source,
+	}
+	if header := r.Header.Get("Content-Type"); header != "" {
+		s3Req.ContentType = &header
+	}
+	return s3Req, nil
+}
+
+func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Request){
+	s3Req, _ := handler.CopyParseInput(request)
+	var copyResult response_type.CopyResult
+	if handler.GCPClient != nil {
+		source := *s3Req.CopySource
+		if strings.Index(source, "/") == 0 {
+			source = source[1:]
+		}
+		sourcePieces := strings.SplitN(source, "/", 2)
+		sourceBucket := sourcePieces[0]
+		sourceKey := sourcePieces[1]
+		bucket := handler.BucketRename(*s3Req.Bucket)
+		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		sourceBucket = handler.BucketRename(sourceBucket)
+		sourceHandle := handler.GCPClientToBucket(sourceBucket, handler.GCPClient).Object(sourceKey)
+		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).CopierFrom(sourceHandle)
+		attrs, err := uploader.Run(*handler.Context)
+		if err != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s\n", err)
+			return
+		}
+		copyResult = converter.GCSCopyResponseToAWS(attrs)
+	} else {
+		req := handler.S3Client.CopyObjectRequest(s3Req)
+		result, err := req.Send()
+		if err != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s", err)
+			return
+		}
+		copyResult = response_type.CopyResult{
+			LastModified: converter.FormatTimeFromCopy(result.CopyObjectResult.LastModified),
+			ETag: *result.CopyObjectResult.ETag,
+		}
+	}
+	output, _ := xml.MarshalIndent(copyResult, "  ", "    ")
+	writer.Write([]byte(s3_handler.XmlHeader))
+	writer.Write([]byte(string(output)))
 }
 
 func New(s3Handler *s3_handler.Handler) *Handler {

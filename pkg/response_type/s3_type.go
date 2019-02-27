@@ -147,3 +147,9 @@ type CompleteMultipartUploadResult struct {
 	ETag *string `xml:"ETag"`
 	Location *string `xml:"Location"`
 }
+
+type CopyResult struct {
+	XMLName xml.Name `xml:"CopyObjectResult"`
+	LastModified string `xml:"LastModified"`
+	ETag string `xml:"ETag"`
+}
