@@ -97,19 +97,8 @@ func Main(cmd *cobra.Command, args []string) {
 			bucketHandler := bucket.New(&handler)
 			objectHandler := object.New(&handler)
 			awsHandlers[key] = &handler
-			r.HandleFunc("/{bucket}", bucketHandler.ACLHandle).Queries("acl", "").Methods("GET")
-			r.HandleFunc("/{bucket}/", bucketHandler.ACLHandle).Queries("acl", "").Methods("GET")
-			r.HandleFunc("/{bucket}", bucketHandler.ListHandle).Methods("GET")
-			r.HandleFunc("/{bucket}/", bucketHandler.ListHandle).Methods("GET")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.HeadHandle).Methods("HEAD")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.GetHandle).Methods("GET")
-			r.HandleFunc("/{bucket}", objectHandler.MultiDeleteHandle).Queries("delete", "").Methods("POST")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.MultiPartHandle).Queries("uploads", "").Methods("POST")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.UploadPartHandle).Queries("partNumber", "{partNumber}", "uploadId", "{uploadId}").Methods("PUT")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.CompleteMultiPartHandle).Queries("uploadId", "{uploadId}").Methods("POST")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.CopyHandle).Headers("x-amz-copy-source", "").Methods("PUT")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.PutHandle).Methods("PUT")
-			r.HandleFunc("/{bucket}/{key:[^#?\\s]+}", objectHandler.DeleteHandle).Methods("DELETE")
+			bucketHandler.Register(r)
+			objectHandler.Register(r)
 		} else if awsConfig.ServiceType == "kinesis" {
 			svc := kinesis.New(configs)
 			handler := kinesishandler.Handler{
@@ -130,8 +119,8 @@ func Main(cmd *cobra.Command, args []string) {
 				handler.Context = &ctx
 			}
 			awsHandlers[key] = &handler
-			kinesisHandler := kinesishandler.New(&handler)
-			r.HandleFunc("/", kinesisHandler.PublishHandle).Methods("POST")
+			wrappedHandler := kinesishandler.New(&handler)
+			wrappedHandler.Register(r)
 		} else if awsConfig.ServiceType == "dynamo" {
 			svc := dynamodb.New(configs)
 			handler := dynamohandler.Handler{
@@ -165,8 +154,8 @@ func Main(cmd *cobra.Command, args []string) {
 				handler.Context = &ctx
 			}
 			awsHandlers[key] = &handler
-			dynamoHandler := dynamohandler.New(&handler)
-			r.HandleFunc("/", dynamoHandler.Handle).Methods("POST")
+			handlerWrapper := dynamohandler.New(&handler)
+			handlerWrapper.Register(r)
 		}
 		r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			logging.Log.Info("Catch all %s %s %s", request.URL, request.Method, request.Header)

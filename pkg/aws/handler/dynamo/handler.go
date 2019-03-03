@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/gorilla/mux"
 	"net/http"
 	"sidecar/pkg/converter"
 	"sidecar/pkg/logging"
@@ -23,11 +24,16 @@ type Dynamo interface {
 	ScanHandle(writer http.ResponseWriter, request *http.Request)
 	ScanParseInput(r *http.Request) (*dynamodb.ScanInput, error)
 	Handle(writer http.ResponseWriter, request *http.Request)
+	Register(mux *mux.Router)
 	New(handler *Handler) *DynamoHandler
 }
 
 func New(handler *Handler) *DynamoHandler {
 	return &DynamoHandler{Handler: handler}
+}
+
+func (handler *DynamoHandler) Register(mux *mux.Router) {
+	mux.HandleFunc("/", handler.Handle).Methods("POST")
 }
 
 func (handler *DynamoHandler) Handle(writer http.ResponseWriter, request *http.Request) {

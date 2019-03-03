@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
+	"github.com/gorilla/mux"
 	"net/http"
 	"sidecar/pkg/logging"
 	"sidecar/pkg/response_type"
@@ -19,11 +20,16 @@ type KinesisHandler struct {
 type Kinesis interface {
 	PublishHandle(writer http.ResponseWriter, request *http.Request)
 	PublishParseInput(r *http.Request) (*response_type.KinesisRequest, error)
+	Register(mux *mux.Router)
 	New(handler *Handler) *KinesisHandler
 }
 
 func New(handler *Handler) *KinesisHandler {
 	return &KinesisHandler{Handler: handler}
+}
+
+func (handler *KinesisHandler) Register(mux *mux.Router) {
+	mux.HandleFunc("/", handler.PublishHandle).Methods("POST")
 }
 
 func (handler *KinesisHandler) PublishParseInput(r *http.Request) (*response_type.KinesisRequest, error) {

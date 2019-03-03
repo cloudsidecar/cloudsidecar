@@ -48,6 +48,19 @@ type Bucket interface {
 	MultiDeleteHandle(writer http.ResponseWriter, request *http.Request)
 	MultiDeleteParseInput(r *http.Request) (*s3.DeleteObjectsInput, error)
 	New(s3Handler *s3_handler.Handler) Handler
+	Register(mux *mux.Router)
+}
+
+func (handler *Handler) Register(mux *mux.Router) {
+	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.HeadHandle).Methods("HEAD")
+	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.GetHandle).Methods("GET")
+	mux.HandleFunc("/{bucket}", handler.MultiDeleteHandle).Queries("delete", "").Methods("POST")
+	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.MultiPartHandle).Queries("uploads", "").Methods("POST")
+	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.UploadPartHandle).Queries("partNumber", "{partNumber}", "uploadId", "{uploadId}").Methods("PUT")
+	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.CompleteMultiPartHandle).Queries("uploadId", "{uploadId}").Methods("POST")
+	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.CopyHandle).Headers("x-amz-copy-source", "").Methods("PUT")
+	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.PutHandle).Methods("PUT")
+	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.DeleteHandle).Methods("DELETE")
 }
 
 func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, request *http.Request){

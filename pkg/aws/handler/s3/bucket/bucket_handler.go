@@ -29,6 +29,7 @@ type Bucket interface {
 	ListParseInput(r *http.Request) (*s3.ListObjectsInput, error)
 	ACLHandle(writer http.ResponseWriter, request *http.Request)
 	ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, error)
+	Register(mux *mux.Router)
 	New(s3Handler *s3_handler.Handler) *Handler
 }
 
@@ -36,6 +37,12 @@ func New(s3Handler *s3_handler.Handler) *Handler {
 	return &Handler{s3Handler}
 }
 
+func (wrapper *Handler) Register(mux *mux.Router) {
+	mux.HandleFunc("/{bucket}", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
+	mux.HandleFunc("/{bucket}/", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
+	mux.HandleFunc("/{bucket}", wrapper.ListHandle).Methods("GET")
+	mux.HandleFunc("/{bucket}/", wrapper.ListHandle).Methods("GET")
+}
 
 func (wrapper *Handler) ListParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
 	vars := mux.Vars(request)
