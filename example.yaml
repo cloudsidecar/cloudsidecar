@@ -1,0 +1,42 @@
+aws_configs:
+  main_s3:
+    service_type: "s3"
+    port: 3450
+    aws_destination_config:
+      name: "bleh"
+      access_key_id: "MY_KEY"
+      secret_access_key: "SUPER_SECRET"
+    gcp_destination_config:
+      name: "silly"
+      key_file_location: "/etc/sidecar-test.json"
+      gcs_config:
+        multipart_db_directory: "/tmp/"
+        bucket_rename:
+          test: "renamed_bucket"
+          cat__DOT__hat: "cathat"
+  kinesis:
+    service_type: "kinesis"
+    port: 3451
+    aws_destination_config:
+      name: "bleh"
+      access_key_id: "my_key"
+      secret_access_key: "super_secret"
+    gcp_destination_config:
+      name: "silly"
+      project: "sidecar-test"
+      key_file_location: "/etc/sidecar-test.json"
+  dyn:
+    service_type: "dynamo"
+    port: 3452
+    aws_destination_config:
+      name: "bleh"
+      access_key_id: "my_key"
+      secret_access_key: "super_secret"
+    gcp_destination_config:
+      name: "silly"
+      project: "sidecar-test"
+      instance: "sidecar"
+      datastore_config:
+        table_key_map:
+          step_table : "step_id"
+      key_file_location: "/etc/sidecar-test.json"
