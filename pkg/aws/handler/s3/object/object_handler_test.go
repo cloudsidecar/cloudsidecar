@@ -5,11 +5,13 @@ import (
 	"context"
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/url"
 	s3_handler "sidecar/pkg/aws/handler/s3"
 	"sidecar/pkg/mock"
 	"testing"
+	"time"
 )
 
 
@@ -39,13 +41,21 @@ func TestHandler_HeadHandle(t *testing.T) {
 		URL: testUrl,
 	}
 	req = mux.SetURLVars(req, valueMap)
+	updatedTime := time.Unix(1550463794, 0)
 	attrs := &storage.ObjectAttrs{
 		Bucket: "boops",
 		Name: "mykey",
+		Size: 123,
+		Updated: updatedTime,
 	}
+	outputMap := make(http.Header)
 	objectMock.EXPECT().Attrs(ctx).Return(attrs, nil)
+	writerMock.EXPECT().Header().Times(2).Return(outputMap)
+	writerMock.EXPECT().WriteHeader(200)
 	handler := New(s3Handler)
 	handler.HeadHandle(writerMock, req)
+	assert.Equal(t, "123", outputMap.Get("Content-Length"))
+	assert.Equal(t, "Mon, 18 Feb 2019 04:23:14 GMT", outputMap.Get("Last-Modified"))
 }
 
 func TestHandler_HeadParseInput(t *testing.T) {

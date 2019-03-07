@@ -36,6 +36,7 @@ func TestGCSACLResponseToAWS(t *testing.T) {
 }
 
 func TestGCSAttrToHeaders(t *testing.T) {
+	utc, _ := time.LoadLocation("UTC")
 	attrs := &storage.ObjectAttrs{
 		Size: 123456,
 		Updated: time.Now(),
@@ -46,12 +47,11 @@ func TestGCSAttrToHeaders(t *testing.T) {
 	writerMock := mock.NewMockResponseWriter(ctrl)
 	writerMock.EXPECT().Header().MaxTimes(2).Return(headers)
 	GCSAttrToHeaders(attrs, writerMock)
+	expectedTime := strings.Replace(attrs.Updated.In(utc).Format(time.RFC1123), "UTC", "GMT", 1)
 	if headers["Content-Length"][0] != "123456" {
 		t.Error("Content length was ", headers["Content-Length"][0], " and not ", 123456)
 	}
-	if headers["Last-Modified"][0] != attrs.Updated.Format(time.RFC1123) {
-		t.Error("Last modified is wrong")
-	}
+	assert.Equal(t, expectedTime, headers["Last-Modified"][0])
 }
 
 func TestGCSAttrToCombine(t *testing.T) {
