@@ -33,7 +33,8 @@ type GCPDestinationConfig struct {
 	IsBigTable bool `mapstructure:"is_bigtable"`
 	GCSConfig *GCSConfig `mapstructure:"gcs_config"`
 	DatastoreConfig *GCPDatastoreConfig `mapstructure:"datastore_config"`
-	KeyFileLocation string `mapstructure:"key_file_location"`
+	KeyFileLocation *string `mapstructure:"key_file_location"`
+	RawKey *string `mapstructure:"raw_key"`
 }
 
 type GCSConfig struct {

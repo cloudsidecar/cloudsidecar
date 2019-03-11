@@ -39,6 +39,10 @@ func newGCPStorage(ctx context.Context, keyFileLocation string) (*storage.Client
 	return storage.NewClient(ctx, option.WithCredentialsFile(keyFileLocation))
 }
 
+func newGCPStorageRawKey(ctx context.Context, rawKey string) (*storage.Client, error) {
+	return storage.NewClient(ctx, option.WithCredentialsJSON([]byte(rawKey)))
+}
+
 func newGCPPubSub(ctx context.Context, project string, keyFileLocation string) (*pubsub.Client, error) {
 	return pubsub.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
 }
@@ -87,7 +91,13 @@ func Main(cmd *cobra.Command, args []string) {
 			}
 			if awsConfig.DestinationGCPConfig != nil {
 				ctx := context.Background()
-				gcpClient, err := newGCPStorage(ctx, awsConfig.DestinationGCPConfig.KeyFileLocation)
+				var gcpClient *storage.Client
+				var err error
+				if awsConfig.DestinationGCPConfig.KeyFileLocation != nil{
+					gcpClient, err = newGCPStorage(ctx, *awsConfig.DestinationGCPConfig.KeyFileLocation)
+				} else {
+					gcpClient, err = newGCPStorageRawKey(ctx, *awsConfig.DestinationGCPConfig.RawKey)
+				}
 				if err != nil {
 					panic(fmt.Sprintln("Error setting up gcp client", err))
 				}
@@ -110,7 +120,7 @@ func Main(cmd *cobra.Command, args []string) {
 				gcpClient, err := newGCPPubSub(
 					ctx,
 					awsConfig.DestinationGCPConfig.Project,
-					awsConfig.DestinationGCPConfig.KeyFileLocation,
+					*awsConfig.DestinationGCPConfig.KeyFileLocation,
 				)
 				if err != nil {
 					panic(fmt.Sprintln("Error setting up gcp client", err))
@@ -134,7 +144,7 @@ func Main(cmd *cobra.Command, args []string) {
 						ctx,
 						awsConfig.DestinationGCPConfig.Project,
 						awsConfig.DestinationGCPConfig.Instance,
-						awsConfig.DestinationGCPConfig.KeyFileLocation,
+						*awsConfig.DestinationGCPConfig.KeyFileLocation,
 					)
 					if err != nil {
 						panic(fmt.Sprintln("Error setting up gcp client", err))
@@ -144,7 +154,7 @@ func Main(cmd *cobra.Command, args []string) {
 					gcpClient, err := newGCPDatastore(
 						ctx,
 						awsConfig.DestinationGCPConfig.Project,
-						awsConfig.DestinationGCPConfig.KeyFileLocation,
+						*awsConfig.DestinationGCPConfig.KeyFileLocation,
 					)
 					if err != nil {
 						panic(fmt.Sprintln("Error setting up gcp client", err))
