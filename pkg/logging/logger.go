@@ -21,6 +21,14 @@ func Init() {
 	logging.SetBackend(backendLeveled)
 }
 
+func LogUsingGCP() {
+	Log.Notice("Using GCP")
+}
+
+func LogUsingAWS() {
+	Log.Notice("Using AWS")
+}
+
 func LoadConfig(config *conf.Config) {
 	err := viper.Unmarshal(config)
 	if err != nil {

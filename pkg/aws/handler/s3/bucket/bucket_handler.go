@@ -85,6 +85,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 	bucket := *input.Bucket
 	var response *response_type.AWSListBucketResponse
 	if wrapper.GCPClient != nil {
+		logging.LogUsingGCP()
 		bucket = wrapper.BucketRename(bucket)
 		//bucketObject := wrapper.GCPClient.Bucket(bucket)
 		bucketObject := wrapper.GCPClientToBucket(bucket, wrapper.GCPClient)
@@ -101,6 +102,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 			return
 		}
 	} else {
+		logging.LogUsingAWS()
 		req := wrapper.S3Client.ListObjectsRequest(input)
 		resp, respError := req.Send()
 		if respError != nil {
@@ -156,6 +158,7 @@ func (wrapper *Handler) ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, e
 func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := wrapper.ACLParseInput(request)
 	if wrapper.GCPClient != nil {
+		logging.LogUsingGCP()
 		bucket := wrapper.BucketRename(*input.Bucket)
 		acl := wrapper.GCPClientToBucket(bucket, wrapper.GCPClient).ACL()
 		aclList, err := acl.List(*wrapper.Context)
@@ -172,6 +175,7 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 		writer.Write([]byte(s3_handler.XmlHeader))
 		writer.Write([]byte(string(output)))
 	} else {
+		logging.LogUsingAWS()
 		req := wrapper.S3Client.GetBucketAclRequest(input)
 		resp, respError := req.Send()
 		if respError != nil {

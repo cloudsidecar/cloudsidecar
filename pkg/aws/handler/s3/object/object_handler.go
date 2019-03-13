@@ -68,6 +68,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 	var resp *response_type.CompleteMultipartUploadResult
 	var err error
 	if handler.GCPClient != nil {
+		logging.LogUsingGCP()
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
 		f, fileErr := os.Open(path)
 		if fileErr != nil {
@@ -104,6 +105,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		}
 		defer os.Remove(path)
 	} else {
+		logging.LogUsingAWS()
 		req := handler.S3Client.CompleteMultipartUploadRequest(s3Req)
 		var s3Resp *s3.CompleteMultipartUploadOutput
 		s3Resp, err = req.Send()
@@ -167,6 +169,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 	var resp *s3.UploadPartOutput
 	var err error
 	if handler.GCPClient != nil {
+		logging.LogUsingGCP()
 		key := partFileName(*s3Req.Key, *s3Req.PartNumber)
 		bucket := handler.GCPClientToBucket(*s3Req.Bucket, handler.GCPClient)
 		uploader := handler.GCPBucketToObject(key, bucket).NewWriter(*handler.Context)
@@ -202,6 +205,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 			return
 		}
 	} else {
+		logging.LogUsingAWS()
 		req := handler.S3Client.UploadPartRequest(s3Req)
 		req.HTTPRequest.Header.Set("Content-Length", request.Header.Get("Content-Length"))
 		req.HTTPRequest.Header.Set("X-Amz-Content-Sha256", request.Header.Get("X-Amz-Content-Sha256"))
@@ -240,6 +244,7 @@ func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *htt
 	var resp *s3.CreateMultipartUploadOutput
 	var err error
 	if handler.GCPClient != nil {
+		logging.LogUsingGCP()
 		uuid := uuid2.New().String()
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), uuid)
 		f, fileErr := os.Create(path)
@@ -257,6 +262,7 @@ func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *htt
 			UploadId: &uuid,
 		}
 	} else {
+		logging.LogUsingAWS()
 		req := handler.S3Client.CreateMultipartUploadRequest(s3Req)
 		resp, err = req.Send()
 	}
@@ -325,6 +331,7 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 	// wg := sync.WaitGroup{}
 	defer request.Body.Close()
 	if handler.GCPClient != nil {
+		logging.LogUsingGCP()
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
 		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).NewWriter(*handler.Context)
@@ -336,6 +343,7 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 			return
 		}
 	} else {
+		logging.LogUsingAWS()
 		uploader := s3manager.NewUploaderWithClient(handler.S3Client)
 		_, err = uploader.Upload(s3Req)
 		if err != nil {
@@ -362,6 +370,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 		input.Range = &header
 	}
 	if handler.GCPClient != nil {
+		logging.LogUsingGCP()
 		bucket := handler.BucketRename(*input.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
 		objHandle := handler.GCPBucketToObject(*input.Key, bucketHandle)
@@ -404,6 +413,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 			}
 		}
 	} else {
+		logging.LogUsingAWS()
 		req := handler.S3Client.GetObjectRequest(input)
 		resp, respError := req.Send()
 		if respError != nil {
@@ -453,6 +463,7 @@ func (handler *Handler) HeadParseInput(r *http.Request) (*s3.HeadObjectInput, er
 func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := handler.HeadParseInput(request)
 	if handler.GCPClient != nil {
+		logging.LogUsingGCP()
 		bucket := handler.BucketRename(*input.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
 		resp, err := handler.GCPBucketToObject(*input.Key, bucketHandle).Attrs(*handler.Context)
@@ -463,6 +474,7 @@ func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Req
 		}
 		converter.GCSAttrToHeaders(resp, writer)
 	} else {
+		logging.LogUsingAWS()
 		req := handler.S3Client.HeadObjectRequest(input)
 		resp, respError := req.Send()
 		if respError != nil {
@@ -518,6 +530,7 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 	s3Req, _ := handler.CopyParseInput(request)
 	var copyResult response_type.CopyResult
 	if handler.GCPClient != nil {
+		logging.LogUsingGCP()
 		source := *s3Req.CopySource
 		if strings.Index(source, "/") == 0 {
 			source = source[1:]
@@ -538,6 +551,7 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 		}
 		copyResult = converter.GCSCopyResponseToAWS(attrs)
 	} else {
+		logging.LogUsingAWS()
 		req := handler.S3Client.CopyObjectRequest(s3Req)
 		result, err := req.Send()
 		if err != nil {
@@ -569,6 +583,7 @@ func (handler *Handler) DeleteParseInput(r *http.Request) (*s3.DeleteObjectInput
 func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.Request){
 	s3Req, _ := handler.DeleteParseInput(request)
 	if handler.GCPClient != nil {
+		logging.LogUsingGCP()
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
 		objectHandle := handler.GCPBucketToObject(*s3Req.Key, bucketHandle)
@@ -579,6 +594,7 @@ func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.R
 			return
 		}
 	} else {
+		logging.LogUsingAWS()
 		req := handler.S3Client.DeleteObjectRequest(s3Req)
 		_, err := req.Send()
 		if err != nil {
@@ -627,6 +643,7 @@ func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *h
 	response := response_type.MultiDeleteResult{
 	}
 	if handler.GCPClient != nil {
+		logging.LogUsingGCP()
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
 		deletedKeys := make([]*string, 0)
@@ -654,6 +671,7 @@ func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *h
 		}
 		response.Errors = failedObjects
 	} else {
+		logging.LogUsingAWS()
 		req := handler.S3Client.DeleteObjectsRequest(s3Req)
 		resp, err := req.Send()
 		if err != nil {
