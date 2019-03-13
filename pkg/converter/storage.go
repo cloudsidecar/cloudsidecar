@@ -96,7 +96,7 @@ func GCSItemToPrefix(item *storage.ObjectAttrs) *response_type.BucketCommonPrefi
 	}
 }
 
-func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput) *response_type.AWSListBucketResponse {
+func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput) (*response_type.AWSListBucketResponse, error) {
 	contentI := 0
 	prefixI := 0
 	var pageResponse []*storage.ObjectAttrs
@@ -106,7 +106,7 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	}
 	nextToken, err := iterator.NewPager(input, 1000, marker).NextPage(&pageResponse)
 	if err != nil{
-		panic(fmt.Sprintf("Boo %s", err))
+		return nil, err
 	}
 	var contents = make([]*response_type.BucketContent, len(pageResponse))
 	var prefixes = make([]*response_type.BucketCommonPrefix, len(pageResponse))
@@ -120,7 +120,7 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 		}
 	}
 	s3Resp := GCSListResponseObjectsToAWS(contents, listRequest, nextToken, contentI, prefixI, prefixes)
-	return s3Resp
+	return s3Resp, nil
 }
 
 func GCSAttrToCombine(input *storage.ObjectAttrs) *response_type.CompleteMultipartUploadResult {

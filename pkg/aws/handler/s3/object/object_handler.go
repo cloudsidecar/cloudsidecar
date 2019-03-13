@@ -72,7 +72,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		f, fileErr := os.Open(path)
 		if fileErr != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error a %s", fileErr)
+			logging.Log.Error("Error a %s %s", request.RequestURI, fileErr)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
@@ -109,7 +109,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		s3Resp, err = req.Send()
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
@@ -122,7 +122,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 	}
 	if err != nil {
 		writer.WriteHeader(404)
-		logging.Log.Error("Error %s", err)
+		logging.Log.Error("Error %s %s", request.RequestURI, err)
 		writer.Write([]byte(string(fmt.Sprint(err))))
 		return
 	}
@@ -175,7 +175,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 		uploader.Close()
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s\n", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
@@ -187,7 +187,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 		f, fileErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 		if fileErr != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", fileErr)
+			logging.Log.Error("Error %s %s", request.RequestURI, fileErr)
 			writer.Write([]byte(string(fmt.Sprint(fileErr))))
 			handler.fileMutex.Unlock()
 			return
@@ -197,7 +197,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 		handler.fileMutex.Unlock()
 		if fileErr != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", fileErr)
+			logging.Log.Error("Error %s %s", request.RequestURI, fileErr)
 			writer.Write([]byte(string(fmt.Sprint(fileErr))))
 			return
 		}
@@ -209,7 +209,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 		resp, err = req.Send()
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error in uploading %s", err)
+			logging.Log.Error("Error in uploading %s %s", request.RequestURI, err)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
@@ -245,7 +245,7 @@ func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *htt
 		f, fileErr := os.Create(path)
 		if fileErr != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
@@ -262,7 +262,7 @@ func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *htt
 	}
 	if err != nil {
 		writer.WriteHeader(404)
-		logging.Log.Error("Error %s", err)
+		logging.Log.Error("Error %s %s", request.RequestURI, err)
 		writer.Write([]byte(string(fmt.Sprint(err))))
 		return
 	}
@@ -332,7 +332,7 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 		_, err := converter.GCPUpload(s3Req, uploader)
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s\n", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
 	} else {
@@ -340,7 +340,7 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 		_, err = uploader.Upload(s3Req)
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
 	}
@@ -368,7 +368,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 		attrs, err := objHandle.Attrs(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
 		converter.GCSAttrToHeaders(attrs, writer)
@@ -389,7 +389,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 		}
 		if readerError != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", readerError)
+			logging.Log.Error("Error %s %s", request.RequestURI, readerError)
 			return
 		}
 		defer reader.Close()
@@ -408,7 +408,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 		resp, respError := req.Send()
 		if respError != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", respError)
+			logging.Log.Error("Error %s %s", request.RequestURI, respError)
 			return
 		}
 		if header := resp.ServerSideEncryption; header != "" {
@@ -458,7 +458,7 @@ func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Req
 		resp, err := handler.GCPBucketToObject(*input.Key, bucketHandle).Attrs(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
 		converter.GCSAttrToHeaders(resp, writer)
@@ -467,7 +467,7 @@ func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Req
 		resp, respError := req.Send()
 		if respError != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", respError)
+			logging.Log.Error("Error %s %s", request.RequestURI, respError)
 			return
 		}
 		if resp.AcceptRanges != nil {
@@ -533,7 +533,7 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 		attrs, err := uploader.Run(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s\n", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
 		copyResult = converter.GCSCopyResponseToAWS(attrs)
@@ -542,7 +542,7 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 		result, err := req.Send()
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
 		copyResult = response_type.CopyResult{
@@ -575,7 +575,7 @@ func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.R
 		err := objectHandle.Delete(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s\n", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
 	} else {
@@ -583,7 +583,7 @@ func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.R
 		_, err := req.Send()
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
 	}
@@ -658,7 +658,7 @@ func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *h
 		resp, err := req.Send()
 		if err != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s", err)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
 		deletedObjects := make([]*response_type.DeleteObject, len(resp.Deleted))
