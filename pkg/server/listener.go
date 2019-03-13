@@ -173,6 +173,8 @@ func Main(cmd *cobra.Command, args []string) {
 			awsHandlers[key] = &handler
 			handlerWrapper := dynamohandler.New(&handler)
 			handlerWrapper.Register(r)
+		} else {
+			logging.Log.Error("No service type configured for port ", awsConfig.Port)
 		}
 		r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			logging.Log.Info("Catch all %s %s %s", request.URL, request.Method, request.Header)
