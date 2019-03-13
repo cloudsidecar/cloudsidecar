@@ -55,6 +55,12 @@ func newGCPDatastore(ctx context.Context, project string, keyFileLocation string
 	return datastore.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
 }
 
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logging.Log.Noticef("%s %s", r.Method, r.RequestURI)
+		next.ServeHTTP(w, r)
+	})
+}
 
 func Main(cmd *cobra.Command, args []string) {
 	var config conf.Config
@@ -72,6 +78,7 @@ func Main(cmd *cobra.Command, args []string) {
 	for key, awsConfig := range config.AwsConfigs  {
 		port := awsConfig.Port
 		r := mux.NewRouter()
+		r.Use(loggingMiddleware)
 		configs := defaults.Config()
 		creds := aws.NewStaticCredentialsProvider(awsConfig.DestinationAWSConfig.AccessKeyId, awsConfig.DestinationAWSConfig.SecretAccessKey, "" )
 		configs.Credentials = creds

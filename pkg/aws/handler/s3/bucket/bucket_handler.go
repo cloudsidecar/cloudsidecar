@@ -13,6 +13,7 @@ import (
 	"sidecar/pkg/logging"
 	"sidecar/pkg/response_type"
 	"strconv"
+	"strings"
 )
 
 
@@ -92,12 +93,18 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 			Prefix: *input.Prefix,
 			Versions: false,
 		})
-		response = converter.GCSListResponseToAWS(it, input)
+		response, err = converter.GCSListResponseToAWS(it, input)
+		if err != nil {
+			logging.Log.Error("Error %s %s\n", request.RequestURI, err)
+			writer.WriteHeader(400)
+			writer.Write([]byte(fmt.Sprint(err)))
+			return
+		}
 	} else {
 		req := wrapper.S3Client.ListObjectsRequest(input)
 		resp, respError := req.Send()
 		if respError != nil {
-			logging.Log.Error("Error %s\n", respError)
+			logging.Log.Error("Error %s %s\n", request.RequestURI, respError)
 			writer.WriteHeader(400)
 			writer.Write([]byte(fmt.Sprint(err)))
 		}
@@ -153,8 +160,12 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 		acl := wrapper.GCPClientToBucket(bucket, wrapper.GCPClient).ACL()
 		aclList, err := acl.List(*wrapper.Context)
 		if err != nil {
-			logging.Log.Error("Error with GCP %s", err)
-			writer.WriteHeader(404)
+			logging.Log.Error("Error with GCP %s %s", request.RequestURI, err)
+			if strings.Contains(err.Error(), "Error 403") {
+				writer.WriteHeader(403)
+			} else {
+				writer.WriteHeader(404)
+			}
 			return
 		}
 		output, _ := xml.MarshalIndent(converter.GCSACLResponseToAWS(aclList), "  ", "    ")
