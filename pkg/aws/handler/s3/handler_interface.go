@@ -3,8 +3,13 @@ package s3
 import (
 	"cloud.google.com/go/storage"
 	"context"
+	"encoding/base64"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3iface"
+	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
+	"google.golang.org/api/option"
+	"net/http"
+	"sidecar/pkg/logging"
 	"strings"
 )
 
@@ -19,6 +24,7 @@ type Handler struct {
 
 type GCPClient interface {
 	Bucket(name string) *storage.BucketHandle
+	Close() error
 }
 
 type GCPObject interface {
@@ -62,6 +68,27 @@ type HandlerInterface interface {
 	SetGCPClient(gcpClient GCPClient)
 	SetContext(context *context.Context)
 	SetConfig(config *viper.Viper)
+	SetGCPClientFromCreds(creds *string)
+	GCPRequestSetup(request *http.Request)
+}
+
+func (handler *Handler) GCPRequestSetup(request *http.Request) {
+	logging.LogUsingGCP()
+	if handler.Config != nil {
+		keyFromUrl := handler.Config.Get("gcp_destination_config.key_from_url")
+		vars := mux.Vars(request)
+		creds := vars["creds"]
+		if keyFromUrl != nil && keyFromUrl == true && creds != "" {
+			handler.SetGCPClientFromCreds(&creds)
+		}
+	}
+}
+
+func (handler *Handler) SetGCPClientFromCreds(creds *string) {
+	decrypted, _ := base64.StdEncoding.DecodeString(*creds)
+	_ = handler.GetGCPClient().Close()
+	client, _ := storage.NewClient(*handler.GetContext(), option.WithCredentialsJSON([]byte(decrypted)))
+	handler.SetGCPClient(client)
 }
 
 func (handler *Handler) GetS3Client() s3iface.S3API {

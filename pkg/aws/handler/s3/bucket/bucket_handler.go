@@ -39,10 +39,18 @@ func New(s3Handler *s3_handler.Handler) *Handler {
 }
 
 func (wrapper *Handler) Register(mux *mux.Router) {
-	mux.HandleFunc("/{bucket}", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
-	mux.HandleFunc("/{bucket}/", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
-	mux.HandleFunc("/{bucket}", wrapper.ListHandle).Methods("GET")
-	mux.HandleFunc("/{bucket}/", wrapper.ListHandle).Methods("GET")
+	keyFromUrl := wrapper.Config.Get("gcp_destination_config.key_from_url")
+	if keyFromUrl != nil && keyFromUrl == true{
+		mux.HandleFunc("/{creds}/{bucket}", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
+		mux.HandleFunc("/{creds}/{bucket}/", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
+		mux.HandleFunc("/{creds}/{bucket}", wrapper.ListHandle).Methods("GET")
+		mux.HandleFunc("/{creds}/{bucket}/", wrapper.ListHandle).Methods("GET")
+	} else {
+		mux.HandleFunc("/{bucket}", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
+		mux.HandleFunc("/{bucket}/", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
+		mux.HandleFunc("/{bucket}", wrapper.ListHandle).Methods("GET")
+		mux.HandleFunc("/{bucket}/", wrapper.ListHandle).Methods("GET")
+	}
 }
 
 func (wrapper *Handler) ListParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
@@ -85,7 +93,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 	bucket := *input.Bucket
 	var response *response_type.AWSListBucketResponse
 	if wrapper.GCPClient != nil {
-		logging.LogUsingGCP()
+		wrapper.GCPRequestSetup(request)
 		bucket = wrapper.BucketRename(bucket)
 		//bucketObject := wrapper.GCPClient.Bucket(bucket)
 		bucketObject := wrapper.GCPClientToBucket(bucket, wrapper.GCPClient)
@@ -158,7 +166,7 @@ func (wrapper *Handler) ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, e
 func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := wrapper.ACLParseInput(request)
 	if wrapper.GCPClient != nil {
-		logging.LogUsingGCP()
+		wrapper.GCPRequestSetup(request)
 		bucket := wrapper.BucketRename(*input.Bucket)
 		acl := wrapper.GCPClientToBucket(bucket, wrapper.GCPClient).ACL()
 		aclList, err := acl.List(*wrapper.Context)
