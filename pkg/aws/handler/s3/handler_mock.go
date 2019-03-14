@@ -3,13 +3,13 @@
 
 // Package mock_s3 is a generated GoMock package.
 package s3
-
 import (
 	storage "cloud.google.com/go/storage"
 	context "context"
 	s3iface "github.com/aws/aws-sdk-go-v2/service/s3/s3iface"
 	gomock "github.com/golang/mock/gomock"
 	viper "github.com/spf13/viper"
+	http "net/http"
 	reflect "reflect"
 )
 
@@ -48,6 +48,20 @@ func (m *MockGCPClient) Bucket(name string) *storage.BucketHandle {
 func (mr *MockGCPClientMockRecorder) Bucket(name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Bucket", reflect.TypeOf((*MockGCPClient)(nil).Bucket), name)
+}
+
+// Close mocks base method
+func (m *MockGCPClient) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close
+func (mr *MockGCPClientMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockGCPClient)(nil).Close))
 }
 
 // MockGCPObject is a mock of GCPObject interface
@@ -596,3 +610,29 @@ func (mr *MockHandlerInterfaceMockRecorder) SetConfig(config interface{}) *gomoc
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetConfig", reflect.TypeOf((*MockHandlerInterface)(nil).SetConfig), config)
 }
+
+// SetGCPClientFromCreds mocks base method
+func (m *MockHandlerInterface) SetGCPClientFromCreds(creds *string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetGCPClientFromCreds", creds)
+}
+
+// SetGCPClientFromCreds indicates an expected call of SetGCPClientFromCreds
+func (mr *MockHandlerInterfaceMockRecorder) SetGCPClientFromCreds(creds interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGCPClientFromCreds", reflect.TypeOf((*MockHandlerInterface)(nil).SetGCPClientFromCreds), creds)
+}
+
+// GCPRequestSetup mocks base method
+func (m *MockHandlerInterface) GCPRequestSetup(request *http.Request) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "GCPRequestSetup", request)
+}
+
+// GCPRequestSetup indicates an expected call of GCPRequestSetup
+func (mr *MockHandlerInterfaceMockRecorder) GCPRequestSetup(request interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GCPRequestSetup", reflect.TypeOf((*MockHandlerInterface)(nil).GCPRequestSetup), request)
+}
+
+

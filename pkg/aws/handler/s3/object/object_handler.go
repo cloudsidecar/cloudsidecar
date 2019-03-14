@@ -52,15 +52,28 @@ type Bucket interface {
 }
 
 func (handler *Handler) Register(mux *mux.Router) {
-	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.HeadHandle).Methods("HEAD")
-	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.GetHandle).Methods("GET")
-	mux.HandleFunc("/{bucket}", handler.MultiDeleteHandle).Queries("delete", "").Methods("POST")
-	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.MultiPartHandle).Queries("uploads", "").Methods("POST")
-	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.UploadPartHandle).Queries("partNumber", "{partNumber}", "uploadId", "{uploadId}").Methods("PUT")
-	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.CompleteMultiPartHandle).Queries("uploadId", "{uploadId}").Methods("POST")
-	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.CopyHandle).Headers("x-amz-copy-source", "").Methods("PUT")
-	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.PutHandle).Methods("PUT")
-	mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.DeleteHandle).Methods("DELETE")
+	keyFromUrl := handler.Config.Get("gcp_destination_config.key_from_url")
+	if keyFromUrl != nil && keyFromUrl == true{
+		mux.HandleFunc("/{creds}/{bucket}/{key:[^#?\\s]+}", handler.HeadHandle).Methods("HEAD")
+		mux.HandleFunc("/{creds}/{bucket}/{key:[^#?\\s]+}", handler.GetHandle).Methods("GET")
+		mux.HandleFunc("/{creds}/{bucket}", handler.MultiDeleteHandle).Queries("delete", "").Methods("POST")
+		mux.HandleFunc("/{creds}/{bucket}/{key:[^#?\\s]+}", handler.MultiPartHandle).Queries("uploads", "").Methods("POST")
+		mux.HandleFunc("/{creds}/{bucket}/{key:[^#?\\s]+}", handler.UploadPartHandle).Queries("partNumber", "{partNumber}", "uploadId", "{uploadId}").Methods("PUT")
+		mux.HandleFunc("/{creds}/{bucket}/{key:[^#?\\s]+}", handler.CompleteMultiPartHandle).Queries("uploadId", "{uploadId}").Methods("POST")
+		mux.HandleFunc("/{creds}/{bucket}/{key:[^#?\\s]+}", handler.CopyHandle).Headers("x-amz-copy-source", "").Methods("PUT")
+		mux.HandleFunc("/{creds}/{bucket}/{key:[^#?\\s]+}", handler.PutHandle).Methods("PUT")
+		mux.HandleFunc("/{creds}/{bucket}/{key:[^#?\\s]+}", handler.DeleteHandle).Methods("DELETE")
+	} else {
+		mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.HeadHandle).Methods("HEAD")
+		mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.GetHandle).Methods("GET")
+		mux.HandleFunc("/{bucket}", handler.MultiDeleteHandle).Queries("delete", "").Methods("POST")
+		mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.MultiPartHandle).Queries("uploads", "").Methods("POST")
+		mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.UploadPartHandle).Queries("partNumber", "{partNumber}", "uploadId", "{uploadId}").Methods("PUT")
+		mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.CompleteMultiPartHandle).Queries("uploadId", "{uploadId}").Methods("POST")
+		mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.CopyHandle).Headers("x-amz-copy-source", "").Methods("PUT")
+		mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.PutHandle).Methods("PUT")
+		mux.HandleFunc("/{bucket}/{key:[^#?\\s]+}", handler.DeleteHandle).Methods("DELETE")
+	}
 }
 
 func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, request *http.Request){
@@ -68,7 +81,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 	var resp *response_type.CompleteMultipartUploadResult
 	var err error
 	if handler.GCPClient != nil {
-		logging.LogUsingGCP()
+		handler.GCPRequestSetup(request)
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
 		f, fileErr := os.Open(path)
 		if fileErr != nil {
@@ -169,7 +182,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 	var resp *s3.UploadPartOutput
 	var err error
 	if handler.GCPClient != nil {
-		logging.LogUsingGCP()
+		handler.GCPRequestSetup(request)
 		key := partFileName(*s3Req.Key, *s3Req.PartNumber)
 		bucket := handler.GCPClientToBucket(*s3Req.Bucket, handler.GCPClient)
 		uploader := handler.GCPBucketToObject(key, bucket).NewWriter(*handler.Context)
@@ -244,7 +257,7 @@ func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *htt
 	var resp *s3.CreateMultipartUploadOutput
 	var err error
 	if handler.GCPClient != nil {
-		logging.LogUsingGCP()
+		handler.GCPRequestSetup(request)
 		uuid := uuid2.New().String()
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), uuid)
 		f, fileErr := os.Create(path)
@@ -331,7 +344,7 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 	// wg := sync.WaitGroup{}
 	defer request.Body.Close()
 	if handler.GCPClient != nil {
-		logging.LogUsingGCP()
+		handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
 		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).NewWriter(*handler.Context)
@@ -370,7 +383,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 		input.Range = &header
 	}
 	if handler.GCPClient != nil {
-		logging.LogUsingGCP()
+		handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*input.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
 		objHandle := handler.GCPBucketToObject(*input.Key, bucketHandle)
@@ -463,7 +476,7 @@ func (handler *Handler) HeadParseInput(r *http.Request) (*s3.HeadObjectInput, er
 func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := handler.HeadParseInput(request)
 	if handler.GCPClient != nil {
-		logging.LogUsingGCP()
+		handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*input.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
 		resp, err := handler.GCPBucketToObject(*input.Key, bucketHandle).Attrs(*handler.Context)
@@ -530,7 +543,7 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 	s3Req, _ := handler.CopyParseInput(request)
 	var copyResult response_type.CopyResult
 	if handler.GCPClient != nil {
-		logging.LogUsingGCP()
+		handler.GCPRequestSetup(request)
 		source := *s3Req.CopySource
 		if strings.Index(source, "/") == 0 {
 			source = source[1:]
@@ -583,7 +596,7 @@ func (handler *Handler) DeleteParseInput(r *http.Request) (*s3.DeleteObjectInput
 func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.Request){
 	s3Req, _ := handler.DeleteParseInput(request)
 	if handler.GCPClient != nil {
-		logging.LogUsingGCP()
+		handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
 		objectHandle := handler.GCPBucketToObject(*s3Req.Key, bucketHandle)
@@ -643,7 +656,7 @@ func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *h
 	response := response_type.MultiDeleteResult{
 	}
 	if handler.GCPClient != nil {
-		logging.LogUsingGCP()
+		handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
 		deletedKeys := make([]*string, 0)
