@@ -10,6 +10,12 @@ import (
 type Config struct {
 	AwsConfigs map[string]AWSConfig `mapstructure:"aws_configs"`
 	GcpConfigs map[string]GCPConfig `mapstructure:"gcp_configs"`
+	Logger *LogConfig `mapstructure:"logger"`
+}
+
+type LogConfig struct {
+	Format *string `mapstructure:"format"`
+	Level *string `mapstructure:"level"`
 }
 
 type AWSConfig struct {
