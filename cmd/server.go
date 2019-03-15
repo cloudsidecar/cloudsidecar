@@ -32,7 +32,7 @@ func Execute() {
 }
 
 func initConfig() {
-	logging.Init()
+	logging.Init("", "")
 	viper.SetConfigFile(configFile)
 	err := viper.ReadInConfig()
 	if err != nil {

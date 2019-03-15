@@ -6,18 +6,27 @@ import (
 	"github.com/spf13/viper"
 	"os"
 	conf "sidecar/pkg/config"
+	"strings"
 )
 
 var Log = logging.MustGetLogger("cloud")
 
-func Init() {
-	var format = logging.MustStringFormatter(
-		`%{color}%{time:15:04:05.000} %{shortfunc} > %{level:.4s} %{id:03x}%{color:reset}:  %{message}`,
-	)
+func Init(pattern string, level string) {
+	if pattern == "" {
+		pattern = `%{color}%{time:2006-01-02T15:04:05.999Z-07:00} %{shortfile} > %{level:.4s}%{color:reset}:  %{message}`
+	}
+	var format = logging.MustStringFormatter(pattern, )
 	var backend = logging.NewLogBackend(os.Stdout, "", 0)
 	var backendFormatter = logging.NewBackendFormatter(backend, format)
 	var backendLeveled = logging.AddModuleLevel(backendFormatter)
-	backendLeveled.SetLevel(logging.INFO, "")
+	loggingLevel := logging.INFO
+	switch strings.ToLower(level) {
+	case "info":
+		loggingLevel = logging.INFO
+	case "debug":
+		loggingLevel = logging.DEBUG
+	}
+	backendLeveled.SetLevel(loggingLevel, "")
 	logging.SetBackend(backendLeveled)
 }
 
@@ -34,5 +43,13 @@ func LoadConfig(config *conf.Config) {
 	if err != nil {
 		panic(fmt.Sprint("Cannot load config ", os.Args[1], err))
 	}
+	format, level := "", ""
+	if config.Logger != nil && config.Logger.Format != nil {
+		format = *config.Logger.Format
+	}
+	if config.Logger != nil && config.Logger.Level != nil {
+		level = *config.Logger.Level
+	}
+	Init(format, level)
 }
 

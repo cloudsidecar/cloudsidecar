@@ -1,3 +1,6 @@
+logger:
+  format: "%{color}%{time:2006-01-02T15:04:05.999Z-07:00} %{shortfile} > %{level:.4s}%{color:reset}:  %{message} "
+  level: "debug"
 aws_configs:
   main_s3:
     service_type: "s3"
