@@ -76,6 +76,26 @@ Take a look at example.yaml
 `./main example.conf`
 
 
+## Plugins
+CS lets you add on your own code or third party code.  Plugins do not require recompiling CS, just drop them into a certain path and restart.
+
+### Handlers
+Handler plugins let you define your own handler code for a config section (port).  It can do whatever you want, raw requests are just passed on.
+A handler plugin just needs to expose a Register function with the signature `func Register(*mux.Router) awshandler.HandlerInterface`.  Your plugin 
+must be compiled (`go build -buildmode=plugin -o your_plugin.so your_plugin_source.go`) and placed in `plugin/handler`.  Set the `service_type` in the config to the plugin file name without an extension, so your_plugin in this case.
+
+See plugin/handler/example.go
+
+### Middleware
+Middleware plugins lets you intercept requests before going to a handler.  Great for metrics, logging, adding some crazy logic, etc..  
+A middleware plugin must expose a Register function with the signature `func Register(config *viper.Viper) func(http.Handler) http.Handler)`.  
+You need to configure the middleware in the top level middlware section with the `type` value is the plugin filename without .so.  
+The plugin file must live in `plugin/middlware/`.  You can then add add the middleware by adding a middleware section to your config.
+
+See plugin/middleware/example.go
+
+
+
 
 ## Notes
 dep ensure -add gopkg.in/yaml.v2
