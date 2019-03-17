@@ -171,6 +171,13 @@ type MultiDeleteResult struct {
 	Errors []*ErrorResult `xml:"Error"`
 }
 
+type AWSACLResponseError struct {
+	XMLName xml.Name `xml:"Error"`
+	Key *string `xml:"Key"`
+	Code *string `xml:"Code"`
+	Message *string `xml:"Message"`
+}
+
 type ErrorResult struct {
 	Key *string `xml:"Key"`
 	Code *string `xml:"Code"`

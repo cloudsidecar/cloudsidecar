@@ -173,7 +173,16 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 		if err != nil {
 			logging.Log.Error("Error with GCP %s %s", request.RequestURI, err)
 			if strings.Contains(err.Error(), "Error 403") {
+				code := "AccessDenied"
+				message := "Access Denied"
+				xmlResponse := response_type.AWSACLResponseError{
+					Code: &code,
+					Message: &message,
+				}
 				writer.WriteHeader(403)
+				output, _ := xml.MarshalIndent(xmlResponse, "  ", "    ")
+				writer.Write([]byte(s3_handler.XmlHeader))
+				writer.Write([]byte(string(output)))
 			} else {
 				writer.WriteHeader(404)
 			}
