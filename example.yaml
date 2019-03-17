@@ -1,7 +1,26 @@
 logger:
   format: "%{color}%{time:2006-01-02T15:04:05.999Z-07:00} %{shortfile} > %{level:.4s}%{color:reset}:  %{message} "
   level: "debug"
+middleware:
+#  logger:
+#    type: "logging" # looks for plugin/middleware/logging.so
+#  metrics:
+#    type: "influx" # looks for plugin/middleware/influx.so
+#    port: 4000 # arbitrary config values to pass to middleware
 aws_configs:
+#  plugin_test:
+#    service_type: "plugin_name" # looks for plugin/handler/plugin_name.so
+#    port: 13450
+#    middleware: ["logger", "metrics"] # use middlewares with names logger and metrics
+#    aws_destination_config:
+#      name: "bleh"
+#      access_key_id: "MY_KEY"
+#      secret_access_key: "SUPER_SECRET"
+#    gcp_destination_config:
+#      name: "silly"
+#      key_file_location: "/etc/sidecar-test.json"
+#      gcs_config:
+#        multipart_db_directory: "/tmp/"
   main_s3:
     service_type: "s3"
     port: 3450

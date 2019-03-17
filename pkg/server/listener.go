@@ -18,7 +18,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/api/option"
-	"log"
 	"net/http"
 	"plugin"
 	awshandler "sidecar/pkg/aws/handler"
@@ -29,6 +28,7 @@ import (
 	"sidecar/pkg/aws/handler/s3/object"
 	conf "sidecar/pkg/config"
 	"sidecar/pkg/logging"
+	"sync"
 	"time"
 )
 
@@ -63,8 +63,28 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func getMiddlewares(config *conf.Config) map[string]func (http.Handler) http.Handler {
+	results := make(map[string]func (http.Handler) http.Handler)
+	for key, middleware := range config.Middleware {
+		plug, err := plugin.Open(fmt.Sprint("plugin/middleware/", middleware.Type, ".so"))
+		if err != nil {
+			logging.Log.Error("Cannot load middleware ", middleware.Type, " for ", key)
+		} else {
+			sym, symErr := plug.Lookup("Register")
+			if symErr != nil {
+				logging.Log.Error("Cannot call register from middleware", middleware.Type, " ", symErr)
+			} else {
+				registerFunc := sym.(func (config *viper.Viper) func(http.Handler) http.Handler)
+				results[key] = registerFunc(viper.Sub(fmt.Sprint("middleware.", key)))
+			}
+		}
+	}
+	return results
+}
+
 func Main(cmd *cobra.Command, args []string) {
 	var config conf.Config
+	var serverWaitGroup sync.WaitGroup
 	logging.LoadConfig(&config)
 	viper.WatchConfig()
 	awsHandlers := make(map[string]awshandler.HandlerInterface)
@@ -76,6 +96,7 @@ func Main(cmd *cobra.Command, args []string) {
 		}
 	})
 	logging.Log.Info("Started... ")
+	middlewares := getMiddlewares(&config)
 	for key, awsConfig := range config.AwsConfigs  {
 		port := awsConfig.Port
 		r := mux.NewRouter()
@@ -85,6 +106,14 @@ func Main(cmd *cobra.Command, args []string) {
 		configs.Credentials = creds
 		//configs.EndpointResolver = aws.ResolveWithEndpointURL("http://localhost:9000")
 		configs.Region = endpoints.UsEast1RegionID
+		ctx := context.Background()
+		for _, middlewareName := range awsConfig.Middleware {
+			if middleware, ok := middlewares[middlewareName]; ok {
+				r.Use(middleware)
+			} else {
+				logging.Log.Error("Could not find middleware ", middlewareName)
+			}
+		}
 		if awsConfig.ServiceType == "s3" {
 			svc := s3.New(configs)
 			handler := s3handler.Handler{
@@ -98,7 +127,6 @@ func Main(cmd *cobra.Command, args []string) {
 				},
 			}
 			if awsConfig.DestinationGCPConfig != nil {
-				ctx := context.Background()
 				var gcpClient *storage.Client
 				var err error
 				if awsConfig.DestinationGCPConfig.KeyFileLocation != nil{
@@ -124,7 +152,6 @@ func Main(cmd *cobra.Command, args []string) {
 				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
 			}
 			if awsConfig.DestinationGCPConfig != nil {
-				ctx := context.Background()
 				gcpClient, err := newGCPPubSub(
 					ctx,
 					awsConfig.DestinationGCPConfig.Project,
@@ -146,7 +173,6 @@ func Main(cmd *cobra.Command, args []string) {
 				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
 			}
 			if awsConfig.DestinationGCPConfig != nil {
-				ctx := context.Background()
 				if awsConfig.DestinationGCPConfig.IsBigTable{
 					gcpClient, err := newGCPBigTable(
 						ctx,
@@ -177,7 +203,7 @@ func Main(cmd *cobra.Command, args []string) {
 		} else if awsConfig.ServiceType == "" {
 			logging.Log.Error("No service type configured for port ", awsConfig.Port)
 		} else {
-			plug, err := plugin.Open(fmt.Sprint("plugin/", awsConfig.ServiceType, ".so"))
+			plug, err := plugin.Open(fmt.Sprint("plugin/handler/", awsConfig.ServiceType, ".so"))
 			if err != nil {
 				logging.Log.Error("Cannot load plugin ", awsConfig.ServiceType, " for port ", awsConfig.Port, err)
 			} else {
@@ -187,6 +213,8 @@ func Main(cmd *cobra.Command, args []string) {
 				} else {
 					registerFunc := sym.(func(*mux.Router) awshandler.HandlerInterface)
 					handler := registerFunc(r)
+					handler.SetConfig(viper.Sub(fmt.Sprint("aws_configs.", key)))
+					handler.SetContext(&ctx)
 					awsHandlers[key] = handler.(awshandler.HandlerInterface)
 				}
 			}
@@ -203,28 +231,10 @@ func Main(cmd *cobra.Command, args []string) {
 			ReadTimeout:  15 * time.Second,
 		}
 		go func(){
-			log.Fatal(srv.ListenAndServe())
+			serverWaitGroup.Add(1)
+			logging.Log.Error("", srv.ListenAndServe())
+			serverWaitGroup.Done()
 		}()
 	}
-	r := mux.NewRouter()
-	/*
-	plug, err := plugin.Open("eng.so")
-	if err != nil {
-		panic(err)
-	}
-	sym, err := plug.Lookup("HandleGet")
-	if err != nil {
-		panic(err)
-	}
-	r.HandleFunc("/sym", sym.(func(http.ResponseWriter, *http.Request))).Methods("GET")
-	*/
-	srv := &http.Server{
-		Handler: r,
-		Addr:    "127.0.0.1:8000",
-		// Good practice: enforce timeouts for servers you create!
-		WriteTimeout: 15 * time.Second,
-		ReadTimeout:  15 * time.Second,
-	}
-
-	log.Fatal(srv.ListenAndServe())
+	serverWaitGroup.Wait()
 }
