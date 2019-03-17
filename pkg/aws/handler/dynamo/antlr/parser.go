@@ -3,8 +3,8 @@ package antlr
 import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	antlr_parser "sidecar/dynamo_parser"
-	"sidecar/pkg/logging"
+	antlr_parser "cloudsidecar/dynamo_parser"
+	"cloudsidecar/pkg/logging"
 )
 
 type Listener struct {

@@ -5,7 +5,7 @@ import (
 	"github.com/op/go-logging"
 	"github.com/spf13/viper"
 	"os"
-	conf "sidecar/pkg/config"
+	conf "cloudsidecar/pkg/config"
 	"strings"
 )
 

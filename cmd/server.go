@@ -5,14 +5,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"os"
-	"sidecar/pkg/logging"
-	"sidecar/pkg/server"
+	"cloudsidecar/pkg/logging"
+	"cloudsidecar/pkg/server"
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "server",
-	Short: "Run cloud sidecar",
-	Long: `Run cloud sidecar`,
+	Short: "Run cloud cloudsidecar",
+	Long: `Run cloud cloudsidecar`,
 	Run: server.Main,
 }
 

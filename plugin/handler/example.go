@@ -5,7 +5,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
 	"net/http"
-	"sidecar/pkg/aws/handler"
+	"cloudsidecar/pkg/aws/handler"
 )
 
 func Register(r *mux.Router) handler.HandlerInterface {

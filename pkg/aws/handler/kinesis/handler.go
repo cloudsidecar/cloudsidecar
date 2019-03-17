@@ -8,8 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/gorilla/mux"
 	"net/http"
-	"sidecar/pkg/logging"
-	"sidecar/pkg/response_type"
+	"cloudsidecar/pkg/logging"
+	"cloudsidecar/pkg/response_type"
 	"sync"
 )
 

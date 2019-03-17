@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/api/option"
 	"net/http"
-	"sidecar/pkg/logging"
+	"cloudsidecar/pkg/logging"
 	"strings"
 )
 

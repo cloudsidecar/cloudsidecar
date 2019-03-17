@@ -7,9 +7,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/gorilla/mux"
 	"net/http"
-	"sidecar/pkg/converter"
-	"sidecar/pkg/logging"
-	"sidecar/pkg/response_type"
+	"cloudsidecar/pkg/converter"
+	"cloudsidecar/pkg/logging"
+	"cloudsidecar/pkg/response_type"
 	"strings"
 )
 

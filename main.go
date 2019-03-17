@@ -1,6 +1,6 @@
 package main
 
-import "sidecar/cmd"
+import "cloudsidecar/cmd"
 
 func main() {
 	cmd.Execute()
