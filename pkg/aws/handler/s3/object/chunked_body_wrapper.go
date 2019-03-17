@@ -3,7 +3,7 @@ package object
 import (
 	"errors"
 	"io"
-	"sidecar/pkg/logging"
+	"cloudsidecar/pkg/logging"
 	"strconv"
 	"strings"
 )
