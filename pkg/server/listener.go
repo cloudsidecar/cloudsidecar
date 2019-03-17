@@ -20,6 +20,7 @@ import (
 	"google.golang.org/api/option"
 	"log"
 	"net/http"
+	"plugin"
 	awshandler "sidecar/pkg/aws/handler"
 	dynamohandler "sidecar/pkg/aws/handler/dynamo"
 	kinesishandler "sidecar/pkg/aws/handler/kinesis"
@@ -173,8 +174,22 @@ func Main(cmd *cobra.Command, args []string) {
 			awsHandlers[key] = &handler
 			handlerWrapper := dynamohandler.New(&handler)
 			handlerWrapper.Register(r)
-		} else {
+		} else if awsConfig.ServiceType == "" {
 			logging.Log.Error("No service type configured for port ", awsConfig.Port)
+		} else {
+			plug, err := plugin.Open(fmt.Sprint("plugin/", awsConfig.ServiceType, ".so"))
+			if err != nil {
+				logging.Log.Error("Cannot load plugin ", awsConfig.ServiceType, " for port ", awsConfig.Port, err)
+			} else {
+				sym, symErr := plug.Lookup("Register")
+				if symErr != nil {
+					logging.Log.Error("Cannot call register from plugin", awsConfig.ServiceType, " ", symErr)
+				} else {
+					registerFunc := sym.(func(*mux.Router) awshandler.HandlerInterface)
+					handler := registerFunc(r)
+					awsHandlers[key] = handler.(awshandler.HandlerInterface)
+				}
+			}
 		}
 		r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			logging.Log.Info("Catch all %s %s %s", request.URL, request.Method, request.Header)
