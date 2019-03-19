@@ -129,6 +129,7 @@ func Main(cmd *cobra.Command, args []string) {
 				GCPBucketToObject: func(name string, bucket s3handler.GCPBucket) s3handler.GCPObject {
 					return bucket.Object(name)
 				},
+				GCPClientPerKey: make(map[string]s3handler.GCPClient),
 			}
 			if awsConfig.DestinationGCPConfig != nil {
 				var gcpClient *storage.Client

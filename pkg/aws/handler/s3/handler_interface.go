@@ -2,6 +2,7 @@ package s3
 
 import (
 	"cloud.google.com/go/storage"
+	"cloudsidecar/pkg/logging"
 	"context"
 	"encoding/base64"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3iface"
@@ -9,7 +10,6 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/api/option"
 	"net/http"
-	"cloudsidecar/pkg/logging"
 	"strings"
 )
 
@@ -20,6 +20,7 @@ type Handler struct {
 	Config            *viper.Viper
 	GCPClientToBucket func(bucket string, client GCPClient) GCPBucket
 	GCPBucketToObject func(name string, bucket GCPBucket) GCPObject
+	GCPClientPerKey   map[string]GCPClient
 }
 
 type GCPClient interface {
@@ -61,40 +62,51 @@ type GCPBucket interface {
 
 type HandlerInterface interface {
 	GetS3Client() s3iface.S3API
-	GetGCPClient() GCPClient
+	GetGCPClient(key string) GCPClient
 	GetContext() *context.Context
 	GetConfig() *viper.Viper
 	SetS3Client(s3Client s3iface.S3API)
-	SetGCPClient(gcpClient GCPClient)
+	SetGCPClient(key string, gcpClient GCPClient)
 	SetContext(context *context.Context)
 	SetConfig(config *viper.Viper)
-	SetGCPClientFromCreds(creds *string)
-	GCPRequestSetup(request *http.Request)
+	SetGCPClientFromCreds(creds *string) GCPClient
+	GCPRequestSetup(request *http.Request) GCPClient
 }
 
-func (handler *Handler) GCPRequestSetup(request *http.Request) {
+func (handler *Handler) GCPRequestSetup(request *http.Request) GCPClient {
 	logging.LogUsingGCP()
 	if handler.Config != nil {
 		keyFromUrl := handler.Config.Get("gcp_destination_config.key_from_url")
 		vars := mux.Vars(request)
 		creds := vars["creds"]
 		if keyFromUrl != nil && keyFromUrl == true && creds != "" {
-			handler.SetGCPClientFromCreds(&creds)
+			return handler.SetGCPClientFromCreds(&creds)
 		}
 	}
+	return handler.GCPClient
 }
 
-func (handler *Handler) SetGCPClientFromCreds(creds *string) {
-	decrypted, _ := base64.StdEncoding.DecodeString(*creds)
-	_ = handler.GetGCPClient().Close()
-	client, _ := storage.NewClient(*handler.GetContext(), option.WithCredentialsJSON([]byte(decrypted)))
-	handler.SetGCPClient(client)
+func (handler *Handler) SetGCPClientFromCreds(creds *string) GCPClient {
+	if connection, ok := handler.GCPClientPerKey[*creds]; ok {
+		return connection
+	} else {
+		decrypted, _ := base64.StdEncoding.DecodeString(*creds)
+		// _ = handler.GetGCPClient().Close()
+		client, _ := storage.NewClient(*handler.GetContext(), option.WithCredentialsJSON([]byte(decrypted)))
+		handler.SetGCPClient(*creds, client)
+		return client
+	}
 }
 
 func (handler *Handler) GetS3Client() s3iface.S3API {
 	return handler.S3Client
 }
-func (handler *Handler) GetGCPClient() GCPClient {
+func (handler *Handler) GetGCPClient(key string) GCPClient {
+	if key != "" {
+		if connection, ok := handler.GCPClientPerKey[key]; ok {
+			return connection
+		}
+	}
 	return handler.GCPClient
 }
 func (handler *Handler) GetContext() *context.Context{
@@ -106,8 +118,12 @@ func (handler *Handler) GetConfig() *viper.Viper {
 func (handler *Handler) SetS3Client(s3Client s3iface.S3API){
 	handler.S3Client = s3Client
 }
-func (handler *Handler) SetGCPClient(gcpClient GCPClient) {
-	handler.GCPClient = gcpClient
+func (handler *Handler) SetGCPClient(key string, gcpClient GCPClient) {
+	if key == "" {
+		handler.GCPClient = gcpClient
+	} else {
+		handler.GCPClientPerKey[key] = gcpClient
+	}
 }
 func (handler *Handler) SetContext(context *context.Context) {
 	handler.Context = context

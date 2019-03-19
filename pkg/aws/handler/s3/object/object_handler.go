@@ -81,7 +81,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 	var resp *response_type.CompleteMultipartUploadResult
 	var err error
 	if handler.GCPClient != nil {
-		handler.GCPRequestSetup(request)
+		client := handler.GCPRequestSetup(request)
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
 		f, fileErr := os.Open(path)
 		if fileErr != nil {
@@ -103,7 +103,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 			objects = append(objects, handler.GCPClient.Bucket(*s3Req.Bucket).Object(pieceKey))
 		}
 		*/
-		bucket := handler.GCPClientToBucket(*s3Req.Bucket, handler.GCPClient)
+		bucket := handler.GCPClientToBucket(*s3Req.Bucket, client)
 		for _, part := range s3Req.MultipartUpload.Parts {
 			partNumber := *part.PartNumber
 			key := partFileName(*s3Req.Key, partNumber)
@@ -182,9 +182,9 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 	var resp *s3.UploadPartOutput
 	var err error
 	if handler.GCPClient != nil {
-		handler.GCPRequestSetup(request)
+		client := handler.GCPRequestSetup(request)
 		key := partFileName(*s3Req.Key, *s3Req.PartNumber)
-		bucket := handler.GCPClientToBucket(*s3Req.Bucket, handler.GCPClient)
+		bucket := handler.GCPClientToBucket(*s3Req.Bucket, client)
 		uploader := handler.GCPBucketToObject(key, bucket).NewWriter(*handler.Context)
 		gReq, _ := handler.PutParseInput(request)
 		_, err := converter.GCPUpload(gReq, uploader)
@@ -257,7 +257,6 @@ func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *htt
 	var resp *s3.CreateMultipartUploadOutput
 	var err error
 	if handler.GCPClient != nil {
-		handler.GCPRequestSetup(request)
 		uuid := uuid2.New().String()
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), uuid)
 		f, fileErr := os.Create(path)
@@ -344,9 +343,9 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 	// wg := sync.WaitGroup{}
 	defer request.Body.Close()
 	if handler.GCPClient != nil {
-		handler.GCPRequestSetup(request)
+		client := handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*s3Req.Bucket)
-		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).NewWriter(*handler.Context)
 		defer uploader.Close()
 		_, err := converter.GCPUpload(s3Req, uploader)
@@ -383,9 +382,9 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 		input.Range = &header
 	}
 	if handler.GCPClient != nil {
-		handler.GCPRequestSetup(request)
+		client := handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*input.Bucket)
-		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		objHandle := handler.GCPBucketToObject(*input.Key, bucketHandle)
 		attrs, err := objHandle.Attrs(*handler.Context)
 		if err != nil {
@@ -476,9 +475,9 @@ func (handler *Handler) HeadParseInput(r *http.Request) (*s3.HeadObjectInput, er
 func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := handler.HeadParseInput(request)
 	if handler.GCPClient != nil {
-		handler.GCPRequestSetup(request)
+		client := handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*input.Bucket)
-		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		resp, err := handler.GCPBucketToObject(*input.Key, bucketHandle).Attrs(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
@@ -543,7 +542,7 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 	s3Req, _ := handler.CopyParseInput(request)
 	var copyResult response_type.CopyResult
 	if handler.GCPClient != nil {
-		handler.GCPRequestSetup(request)
+		client := handler.GCPRequestSetup(request)
 		source := *s3Req.CopySource
 		if strings.Index(source, "/") == 0 {
 			source = source[1:]
@@ -552,9 +551,9 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 		sourceBucket := sourcePieces[0]
 		sourceKey := sourcePieces[1]
 		bucket := handler.BucketRename(*s3Req.Bucket)
-		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		sourceBucket = handler.BucketRename(sourceBucket)
-		sourceHandle := handler.GCPClientToBucket(sourceBucket, handler.GCPClient).Object(sourceKey)
+		sourceHandle := handler.GCPClientToBucket(sourceBucket, client).Object(sourceKey)
 		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).CopierFrom(sourceHandle)
 		attrs, err := uploader.Run(*handler.Context)
 		if err != nil {
@@ -596,9 +595,9 @@ func (handler *Handler) DeleteParseInput(r *http.Request) (*s3.DeleteObjectInput
 func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.Request){
 	s3Req, _ := handler.DeleteParseInput(request)
 	if handler.GCPClient != nil {
-		handler.GCPRequestSetup(request)
+		client := handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*s3Req.Bucket)
-		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		objectHandle := handler.GCPBucketToObject(*s3Req.Key, bucketHandle)
 		err := objectHandle.Delete(*handler.Context)
 		if err != nil {
@@ -656,9 +655,9 @@ func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *h
 	response := response_type.MultiDeleteResult{
 	}
 	if handler.GCPClient != nil {
-		handler.GCPRequestSetup(request)
+		client := handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*s3Req.Bucket)
-		bucketHandle := handler.GCPClientToBucket(bucket, handler.GCPClient)
+		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		deletedKeys := make([]*string, 0)
 		failedKeys := make([]*string, 0)
 		for _, obj := range s3Req.Delete.Objects {
