@@ -46,6 +46,7 @@ type GCPDestinationConfig struct {
 	GCSConfig *GCSConfig `mapstructure:"gcs_config"`
 	DatastoreConfig *GCPDatastoreConfig `mapstructure:"datastore_config"`
 	KeyFileLocation *string `mapstructure:"key_file_location"`
+	KeyFromUrl *bool `mapstructure:"key_from_url"`
 	RawKey *string `mapstructure:"raw_key"`
 }
 

@@ -40,6 +40,10 @@ func newGCPStorage(ctx context.Context, keyFileLocation string) (*storage.Client
 	return storage.NewClient(ctx, option.WithCredentialsFile(keyFileLocation))
 }
 
+func newGCPStorageNoCreds(ctx context.Context) (*storage.Client, error) {
+	return storage.NewClient(ctx)
+}
+
 func newGCPStorageRawKey(ctx context.Context, rawKey string) (*storage.Client, error) {
 	return storage.NewClient(ctx, option.WithCredentialsJSON([]byte(rawKey)))
 }
@@ -131,6 +135,8 @@ func Main(cmd *cobra.Command, args []string) {
 				var err error
 				if awsConfig.DestinationGCPConfig.KeyFileLocation != nil{
 					gcpClient, err = newGCPStorage(ctx, *awsConfig.DestinationGCPConfig.KeyFileLocation)
+				} else if awsConfig.DestinationGCPConfig.KeyFromUrl != nil && *awsConfig.DestinationGCPConfig.KeyFromUrl {
+					gcpClient, err = newGCPStorageNoCreds(ctx)
 				} else {
 					gcpClient, err = newGCPStorageRawKey(ctx, *awsConfig.DestinationGCPConfig.RawKey)
 				}
@@ -230,8 +236,8 @@ func Main(cmd *cobra.Command, args []string) {
 			WriteTimeout: 15 * time.Second,
 			ReadTimeout:  15 * time.Second,
 		}
+		serverWaitGroup.Add(1)
 		go func(){
-			serverWaitGroup.Add(1)
 			logging.Log.Error("", srv.ListenAndServe())
 			serverWaitGroup.Done()
 		}()
