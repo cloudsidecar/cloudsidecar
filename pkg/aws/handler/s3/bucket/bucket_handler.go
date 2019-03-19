@@ -93,10 +93,9 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 	bucket := *input.Bucket
 	var response *response_type.AWSListBucketResponse
 	if wrapper.GCPClient != nil {
-		wrapper.GCPRequestSetup(request)
+		client := wrapper.GCPRequestSetup(request)
 		bucket = wrapper.BucketRename(bucket)
-		//bucketObject := wrapper.GCPClient.Bucket(bucket)
-		bucketObject := wrapper.GCPClientToBucket(bucket, wrapper.GCPClient)
+		bucketObject := wrapper.GCPClientToBucket(bucket, client)
 		it := bucketObject.Objects(*wrapper.Context, &storage.Query{
 			Delimiter: *input.Delimiter,
 			Prefix: *input.Prefix,
@@ -166,9 +165,9 @@ func (wrapper *Handler) ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, e
 func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := wrapper.ACLParseInput(request)
 	if wrapper.GCPClient != nil {
-		wrapper.GCPRequestSetup(request)
+		client := wrapper.GCPRequestSetup(request)
 		bucket := wrapper.BucketRename(*input.Bucket)
-		acl := wrapper.GCPClientToBucket(bucket, wrapper.GCPClient).ACL()
+		acl := wrapper.GCPClientToBucket(bucket, client).ACL()
 		aclList, err := acl.List(*wrapper.Context)
 		if err != nil {
 			logging.Log.Error("Error with GCP %s %s", request.RequestURI, err)
