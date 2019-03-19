@@ -11,6 +11,7 @@ import (
 	"google.golang.org/api/option"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 type Handler struct {
@@ -21,6 +22,7 @@ type Handler struct {
 	GCPClientToBucket func(bucket string, client GCPClient) GCPBucket
 	GCPBucketToObject func(name string, bucket GCPBucket) GCPObject
 	GCPClientPerKey   map[string]GCPClient
+	gcpClientMapLock  sync.Mutex
 }
 
 type GCPClient interface {
@@ -92,8 +94,14 @@ func (handler *Handler) SetGCPClientFromCreds(creds *string) GCPClient {
 	} else {
 		decrypted, _ := base64.StdEncoding.DecodeString(*creds)
 		// _ = handler.GetGCPClient().Close()
-		client, _ := storage.NewClient(*handler.GetContext(), option.WithCredentialsJSON([]byte(decrypted)))
-		handler.SetGCPClient(*creds, client)
+		handler.gcpClientMapLock.Lock()
+		defer handler.gcpClientMapLock.Unlock()
+		var client GCPClient
+		var doubleCheck bool
+		if client, doubleCheck = handler.GCPClientPerKey[*creds]; !doubleCheck {
+			client, _ = storage.NewClient(*handler.GetContext(), option.WithCredentialsJSON([]byte(decrypted)))
+			handler.SetGCPClient(*creds, client)
+		}
 		return client
 	}
 }
