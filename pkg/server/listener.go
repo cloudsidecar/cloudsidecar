@@ -69,19 +69,25 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func getMiddlewares(config *conf.Config) map[string]func (http.Handler) http.Handler {
+func getMiddlewares(enterpriseSystem enterprise.Enterprise, config *conf.Config) map[string]func (http.Handler) http.Handler {
 	results := make(map[string]func (http.Handler) http.Handler)
+	enterpriseMiddlewares := enterpriseSystem.RegisterMiddlewares()
+
 	for key, middleware := range config.Middleware {
-		plug, err := plugin.Open(fmt.Sprint("plugin/middleware/", middleware.Type, ".so"))
-		if err != nil {
-			logging.Log.Error("Cannot load middleware ", middleware.Type, " for ", key)
+		if enterpriseMiddleware, ok := enterpriseMiddlewares[middleware.Type]; ok {
+			results[key] = enterpriseMiddleware(viper.Sub(fmt.Sprint("middleware.", key)))
 		} else {
-			sym, symErr := plug.Lookup("Register")
-			if symErr != nil {
-				logging.Log.Error("Cannot call register from middleware", middleware.Type, " ", symErr)
+			plug, err := plugin.Open(fmt.Sprint("plugin/middleware/", middleware.Type, ".so"))
+			if err != nil {
+				logging.Log.Error("Cannot load middleware ", middleware.Type, " for ", key)
 			} else {
-				registerFunc := sym.(func (config *viper.Viper) func(http.Handler) http.Handler)
-				results[key] = registerFunc(viper.Sub(fmt.Sprint("middleware.", key)))
+				sym, symErr := plug.Lookup("Register")
+				if symErr != nil {
+					logging.Log.Error("Cannot call register from middleware", middleware.Type, " ", symErr)
+				} else {
+					registerFunc := sym.(func (config *viper.Viper) func(http.Handler) http.Handler)
+					results[key] = registerFunc(viper.Sub(fmt.Sprint("middleware.", key)))
+				}
 			}
 		}
 	}
@@ -105,10 +111,7 @@ func Main(cmd *cobra.Command, args []string) {
 		}
 	})
 	logging.Log.Info("Started... ")
-	middlewares := getMiddlewares(&config)
-	for key, val := range enterpriseSystem.RegisterMiddlewares() {
-		middlewares[key] = val
-	}
+	middlewares := getMiddlewares(enterpriseSystem, &config)
 	for key, awsConfig := range config.AwsConfigs  {
 		port := awsConfig.Port
 		r := mux.NewRouter()

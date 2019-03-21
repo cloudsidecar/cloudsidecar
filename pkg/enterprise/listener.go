@@ -3,6 +3,7 @@ package enterprise
 import (
 	"cloudsidecar/pkg/config"
 	"github.com/gorilla/mux"
+	"github.com/spf13/viper"
 	"net/http"
 	"reflect"
 	"sync"
@@ -14,7 +15,7 @@ var instanceType reflect.Type
 
 type Enterprise interface {
 	RegisterHandler(awsConfig *config.AWSConfig, router *mux.Router) bool
-	RegisterMiddlewares() map[string]func (next http.Handler) http.Handler
+	RegisterMiddlewares() map[string]func (config *viper.Viper) func (next http.Handler) http.Handler
 	Init()
 }
 
@@ -53,8 +54,8 @@ func (*Noop) RegisterHandler(awsConfig *config.AWSConfig, router *mux.Router) bo
 	return false
 }
 
-func (*Noop) RegisterMiddlewares() map[string]func (next http.Handler) http.Handler {
-	return make(map[string]func (next http.Handler) http.Handler)
+func (*Noop) RegisterMiddlewares() map[string]func (config *viper.Viper) func (next http.Handler) http.Handler {
+	return make(map[string]func (config *viper.Viper) func (next http.Handler) http.Handler)
 }
 
 func (*Noop) Init() {
