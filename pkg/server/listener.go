@@ -5,6 +5,7 @@ import (
 	"cloud.google.com/go/datastore"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
+	"cloudsidecar/pkg/enterprise"
 	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -28,6 +29,7 @@ import (
 	"cloudsidecar/pkg/aws/handler/s3/object"
 	conf "cloudsidecar/pkg/config"
 	"cloudsidecar/pkg/logging"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -89,6 +91,9 @@ func getMiddlewares(config *conf.Config) map[string]func (http.Handler) http.Han
 func Main(cmd *cobra.Command, args []string) {
 	var config conf.Config
 	var serverWaitGroup sync.WaitGroup
+	var enterpriseSystem enterprise.Enterprise
+	enterprise.RegisterType(reflect.TypeOf(enterprise.Noop{}))
+	enterpriseSystem = enterprise.GetSingleton()
 	logging.LoadConfig(&config)
 	viper.WatchConfig()
 	awsHandlers := make(map[string]awshandler.HandlerInterface)
@@ -101,6 +106,9 @@ func Main(cmd *cobra.Command, args []string) {
 	})
 	logging.Log.Info("Started... ")
 	middlewares := getMiddlewares(&config)
+	for key, val := range enterpriseSystem.RegisterMiddlewares() {
+		middlewares[key] = val
+	}
 	for key, awsConfig := range config.AwsConfigs  {
 		port := awsConfig.Port
 		r := mux.NewRouter()
@@ -209,6 +217,8 @@ func Main(cmd *cobra.Command, args []string) {
 			handlerWrapper.Register(r)
 		} else if awsConfig.ServiceType == "" {
 			logging.Log.Error("No service type configured for port ", awsConfig.Port)
+		} else if enterpriseSystem.RegisterHandler(&awsConfig, r){
+			// do nothing, enterprise got this
 		} else {
 			plug, err := plugin.Open(fmt.Sprint("plugin/handler/", awsConfig.ServiceType, ".so"))
 			if err != nil {
