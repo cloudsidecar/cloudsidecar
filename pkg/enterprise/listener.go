@@ -39,6 +39,7 @@ func GetSingleton() Enterprise {
 			} else {
 				instance = &Noop{}
 			}
+			instance.Init()
 			return instance
 		}
 	}
