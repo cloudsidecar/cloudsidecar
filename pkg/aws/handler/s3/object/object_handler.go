@@ -256,7 +256,8 @@ func (handler *Handler) UploadPartParseInput(r *http.Request) (*s3.UploadPartInp
 
 func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *http.Request){
 	s3Req, _ := handler.MultiPartParseInput(request)
-	var resp *s3.CreateMultipartUploadOutput
+	var resp *response_type.InitiateMultipartUploadResult
+	var createResp *s3.CreateMultipartUploadOutput
 	var err error
 	if handler.GCPClient != nil {
 		uuid := uuid2.New().String()
@@ -270,15 +271,22 @@ func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *htt
 		}
 		defer f.Close()
 		logging.Log.Info(uuid)
-		resp = &s3.CreateMultipartUploadOutput{
+		resp = &response_type.InitiateMultipartUploadResult{
 			Key: s3Req.Key,
 			Bucket: s3Req.Bucket,
 			UploadId: &uuid,
+			XmlNS: response_type.ACLXmlNs,
 		}
 	} else {
 		logging.LogUsingAWS()
 		req := handler.S3Client.CreateMultipartUploadRequest(s3Req)
-		resp, err = req.Send()
+		createResp, err = req.Send()
+		resp = &response_type.InitiateMultipartUploadResult{
+			Key: s3Req.Key,
+			Bucket: s3Req.Bucket,
+			UploadId: createResp.UploadId,
+			XmlNS: response_type.ACLXmlNs,
+		}
 	}
 	if err != nil {
 		writer.WriteHeader(404)
