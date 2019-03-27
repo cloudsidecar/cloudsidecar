@@ -2,15 +2,14 @@ package converter
 
 import (
 	"cloud.google.com/go/storage"
-	"encoding/base64"
+	"cloudsidecar/pkg/logging"
+	"cloudsidecar/pkg/response_type"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
 	"google.golang.org/api/iterator"
 	"io"
 	"net/http"
-	"cloudsidecar/pkg/logging"
-	"cloudsidecar/pkg/response_type"
 	"strconv"
 	"strings"
 	"time"
@@ -186,7 +185,9 @@ func GCSACLResponseToAWS(input []storage.ACLRule) response_type.AWSACLResponse {
 }
 
 func MD5toEtag(input []byte) string {
-	return base64.StdEncoding.EncodeToString(input)
+	return fmt.Sprintf("%x", input)
+	//apparently GCP etag is a base64 encoding, aws is just md5
+	//return base64.StdEncoding.EncodeToString(input)
 }
 
 func FormatTimeZulu(input *time.Time) string {
