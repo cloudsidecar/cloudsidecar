@@ -32,7 +32,7 @@ func (wrapper *ChunkedReaderWrapper) ReadHeaderGetChunkSize() (i int, err error)
 		logging.Log.Error("Error reading header %s", err)
 		return 0, err
 	}
-	logging.Log.Info("Read header %s\n", chunkedHeader)
+	logging.Log.Debug("Read header %s\n", chunkedHeader)
 	chunkedSplit := strings.SplitN(chunkedHeader, ";", 2)
 	chunkSize, err := strconv.ParseInt(chunkedSplit[0], 16, 32)
 	return int(chunkSize), err
