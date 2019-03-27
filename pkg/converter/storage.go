@@ -156,30 +156,35 @@ func GCSACLResponseToAWS(input []storage.ACLRule) response_type.AWSACLResponse {
 	// lets only do head
 	// var grants = make([]*response_type.Grant, len(input))
 	var grants = make([]*response_type.Grant, 1)
-	for i, entry := range input[:1] {
-		var displayName string
-		if entry.Email != "" {
-			displayName = entry.Email
-		} else {
-			displayName = string(entry.Entity)
+	if len(input) > 0 {
+		for i, entry := range input[:1] {
+			var displayName string
+			if entry.Email != "" {
+				displayName = entry.Email
+			} else {
+				displayName = string(entry.Entity)
+			}
+			if entry.Role == storage.RoleOwner && response.OwnerId == "" {
+				response.OwnerId = string(entry.Entity)
+				response.OwnerDisplayName = displayName
+			}
+			grant := &response_type.Grant{
+				Permission: gcpPermissionToAWS(entry.Role),
+				Grantee: &response_type.Grantee{
+					DisplayName: displayName,
+					Id: string(entry.Entity),
+					XmlNS: response_type.ACLXmlNs,
+					Xsi: response_type.ACLXmlXsi,
+				},
+			}
+			grants[i] = grant
 		}
-		if entry.Role == storage.RoleOwner && response.OwnerId == "" {
-			response.OwnerId = string(entry.Entity)
-			response.OwnerDisplayName = displayName
+		response.AccessControlList = &response_type.AccessControlList{
+			Grants: grants,
 		}
-		grant := &response_type.Grant{
-			Permission: gcpPermissionToAWS(entry.Role),
-			Grantee: &response_type.Grantee{
-				DisplayName: displayName,
-				Id: string(entry.Entity),
-				XmlNS: response_type.ACLXmlNs,
-				Xsi: response_type.ACLXmlXsi,
-			},
+	} else {
+		response.AccessControlList = &response_type.AccessControlList{
 		}
-		grants[i] = grant
-	}
-	response.AccessControlList = &response_type.AccessControlList{
-		Grants: grants,
 	}
 	return response
 }
