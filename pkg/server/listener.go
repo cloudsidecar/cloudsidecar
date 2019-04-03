@@ -5,7 +5,15 @@ import (
 	"cloud.google.com/go/datastore"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
+	awshandler "cloudsidecar/pkg/aws/handler"
+	dynamohandler "cloudsidecar/pkg/aws/handler/dynamo"
+	kinesishandler "cloudsidecar/pkg/aws/handler/kinesis"
+	s3handler "cloudsidecar/pkg/aws/handler/s3"
+	"cloudsidecar/pkg/aws/handler/s3/bucket"
+	"cloudsidecar/pkg/aws/handler/s3/object"
+	conf "cloudsidecar/pkg/config"
 	"cloudsidecar/pkg/enterprise"
+	"cloudsidecar/pkg/logging"
 	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -21,14 +29,6 @@ import (
 	"google.golang.org/api/option"
 	"net/http"
 	"plugin"
-	awshandler "cloudsidecar/pkg/aws/handler"
-	dynamohandler "cloudsidecar/pkg/aws/handler/dynamo"
-	kinesishandler "cloudsidecar/pkg/aws/handler/kinesis"
-	s3handler "cloudsidecar/pkg/aws/handler/s3"
-	"cloudsidecar/pkg/aws/handler/s3/bucket"
-	"cloudsidecar/pkg/aws/handler/s3/object"
-	conf "cloudsidecar/pkg/config"
-	"cloudsidecar/pkg/logging"
 	"reflect"
 	"sync"
 	"time"
@@ -113,6 +113,7 @@ func Main(cmd *cobra.Command, args []string) {
 	logging.Log.Info("Started... ")
 	middlewares := getMiddlewares(enterpriseSystem, &config)
 	for key, awsConfig := range config.AwsConfigs  {
+		toListen := true
 		port := awsConfig.Port
 		r := mux.NewRouter()
 		r.Use(loggingMiddleware)
@@ -220,7 +221,8 @@ func Main(cmd *cobra.Command, args []string) {
 			handlerWrapper.Register(r)
 		} else if awsConfig.ServiceType == "" {
 			logging.Log.Error("No service type configured for port ", awsConfig.Port)
-		} else if enterpriseSystem.RegisterHandler(&awsConfig, r){
+		} else if enterpriseSystem.RegisterHandler(&awsConfig, r, serverWaitGroup){
+			toListen = false
 			// do nothing, enterprise got this
 		} else {
 			plug, err := plugin.Open(fmt.Sprint("plugin/handler/", awsConfig.ServiceType, ".so"))
@@ -243,18 +245,20 @@ func Main(cmd *cobra.Command, args []string) {
 			logging.Log.Info("Catch all %s %s %s", request.URL, request.Method, request.Header)
 			writer.WriteHeader(404)
 		})
-		srv := &http.Server{
-			Handler: r,
-			Addr:    fmt.Sprintf("127.0.0.1:%d", port),
-			// Good practice: enforce timeouts for servers you create!
-			WriteTimeout: 15 * time.Second,
-			ReadTimeout:  15 * time.Second,
-		}
 		serverWaitGroup.Add(1)
-		go func(){
-			logging.Log.Error("", srv.ListenAndServe())
-			serverWaitGroup.Done()
-		}()
+		if toListen {
+			srv := &http.Server{
+				Handler: r,
+				Addr:    fmt.Sprintf("127.0.0.1:%d", port),
+				// Good practice: enforce timeouts for servers you create!
+				WriteTimeout: 15 * time.Second,
+				ReadTimeout:  15 * time.Second,
+			}
+			go func(){
+				logging.Log.Error("", srv.ListenAndServe())
+				serverWaitGroup.Done()
+			}()
+		}
 	}
 	serverWaitGroup.Wait()
 }
