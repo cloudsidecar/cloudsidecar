@@ -110,7 +110,9 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	var contents = make([]*response_type.BucketContent, len(pageResponse))
 	var prefixes = make([]*response_type.BucketCommonPrefix, len(pageResponse))
 	for _, item := range pageResponse {
-		if item.Name != "" {
+		if strings.HasSuffix(item.Name, "/") {
+
+		} else if item.Name != "" {
 			contents[contentI] = GCSItemToContent(item)
 			contentI++
 		} else {

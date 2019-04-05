@@ -31,7 +31,6 @@ import (
 	"plugin"
 	"reflect"
 	"sync"
-	"time"
 )
 
 type Handler interface {
@@ -250,9 +249,6 @@ func Main(cmd *cobra.Command, args []string) {
 			srv := &http.Server{
 				Handler: r,
 				Addr:    fmt.Sprintf("127.0.0.1:%d", port),
-				// Good practice: enforce timeouts for servers you create!
-				WriteTimeout: 15 * time.Second,
-				ReadTimeout:  15 * time.Second,
 			}
 			go func(){
 				logging.Log.Error("", srv.ListenAndServe())
