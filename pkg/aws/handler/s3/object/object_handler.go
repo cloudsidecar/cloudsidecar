@@ -678,6 +678,7 @@ func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *h
 				deletedKeys = append(deletedKeys, obj.Key)
 			}
 		}
+		logging.Log.Debugf("failed keys %s", failedKeys)
 		deletedObjects := make([]*response_type.DeleteObject, len(deletedKeys))
 		for i, obj := range deletedKeys {
 			deletedObjects[i] = &response_type.DeleteObject{
