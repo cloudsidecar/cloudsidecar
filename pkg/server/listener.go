@@ -220,7 +220,7 @@ func Main(cmd *cobra.Command, args []string) {
 			handlerWrapper.Register(r)
 		} else if awsConfig.ServiceType == "" {
 			logging.Log.Error("No service type configured for port ", awsConfig.Port)
-		} else if enterpriseSystem.RegisterHandler(&awsConfig, r, serverWaitGroup){
+		} else if enterpriseSystem.RegisterHandler(awsConfig, r, serverWaitGroup){
 			toListen = false
 			// do nothing, enterprise got this
 		} else {
