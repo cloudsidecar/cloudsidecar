@@ -2,6 +2,7 @@ package object
 
 import (
 	"cloud.google.com/go/storage"
+	"crypto/md5"
 	"encoding/xml"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -9,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
 	uuid2 "github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"google.golang.org/api/iterator"
 	"io"
 	"net/http"
 	"os"
@@ -485,14 +487,44 @@ func (handler *Handler) HeadParseInput(r *http.Request) (*s3.HeadObjectInput, er
 func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := handler.HeadParseInput(request)
 	if handler.GCPClient != nil {
+		var resp *storage.ObjectAttrs
 		client := handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*input.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
-		resp, err := handler.GCPBucketToObject(*input.Key, bucketHandle).Attrs(*handler.Context)
-		if err != nil {
-			writer.WriteHeader(404)
-			logging.Log.Error("Error %s %s", request.RequestURI, err)
-			return
+		if strings.HasSuffix(*input.Key, "/") {
+			//directories dont have header info so fake it
+			it := bucketHandle.Objects(*handler.Context, &storage.Query{
+				Delimiter: "/",
+				Prefix: *input.Key,
+				Versions: false,
+			})
+			var pageResponse []*storage.ObjectAttrs
+			_, err := iterator.NewPager(it, 1, "").NextPage(&pageResponse)
+			if err != nil{
+				writer.WriteHeader(404)
+				logging.Log.Error("Error %s %s", request.RequestURI, err)
+				return
+			}
+			if len(pageResponse) == 0 {
+				writer.WriteHeader(404)
+				logging.Log.Error("Error %s key doesn't exist", request.RequestURI)
+				return
+			}
+			hash := md5.Sum([]byte(time.Now().String()))
+			resp = &storage.ObjectAttrs{
+				Bucket: *input.Bucket,
+				Name: *input.Key,
+				Updated: time.Now(),
+				MD5: hash[:],
+			}
+		} else {
+			var err error
+			resp, err = handler.GCPBucketToObject(*input.Key, bucketHandle).Attrs(*handler.Context)
+			if err != nil {
+				writer.WriteHeader(404)
+				logging.Log.Error("Error %s %s", request.RequestURI, err)
+				return
+			}
 		}
 		converter.GCSAttrToHeaders(resp, writer)
 	} else {
@@ -668,31 +700,24 @@ func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *h
 		client := handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
-		deletedKeys := make([]*string, 0)
-		failedKeys := make([]*string, 0)
+		deletedKeys := make([]string, 0)
+		failedKeys := make([]string, 0)
 		for _, obj := range s3Req.Delete.Objects {
 			err := bucketHandle.Object(*obj.Key).Delete(*handler.Context)
 			if err != nil {
-				failedKeys = append(failedKeys, obj.Key)
+				failedKeys = append(failedKeys, *obj.Key)
 			} else {
-				deletedKeys = append(deletedKeys, obj.Key)
+				deletedKeys = append(deletedKeys, *obj.Key)
 			}
 		}
-		logging.Log.Debugf("failed keys %s", failedKeys)
+		logging.Log.Debugf("failed keys %s succeeded keys", failedKeys, deletedKeys)
 		deletedObjects := make([]*response_type.DeleteObject, len(deletedKeys))
 		for i, obj := range deletedKeys {
 			deletedObjects[i] = &response_type.DeleteObject{
-				Key: obj,
+				Key: &obj,
 			}
 		}
 		response.Objects = deletedObjects
-		failedObjects := make([]*response_type.ErrorResult, len(failedKeys))
-		for i, obj := range failedKeys {
-			failedObjects[i] = &response_type.ErrorResult{
-				Key: obj,
-			}
-		}
-		response.Errors = failedObjects
 	} else {
 		logging.LogUsingAWS()
 		req := handler.S3Client.DeleteObjectsRequest(s3Req)
