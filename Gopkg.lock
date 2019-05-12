@@ -2,7 +2,7 @@
 
 
 [[projects]]
-  digest = "1:778785ceeeb8c81c57bbf8478b1aa14e114a84bd44e9f8b9d6039ac519e6df2c"
+  digest = "1:b63f5cba1d1f3f3dbdde735141c58860041caa76a07dd6ee233a53a42f5e3268"
   name = "cloud.google.com/go"
   packages = [
     "bigtable",
@@ -16,6 +16,7 @@
     "internal/optional",
     "internal/trace",
     "internal/version",
+    "kms/apiv1",
     "longrunning",
     "longrunning/autogen",
     "pubsub",
@@ -418,12 +419,13 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:5bf8f1f22554bfe8a42fb53fbaeb90f8b3cd5622fd3e5a2a639b3f8ee2f4d47c"
+  digest = "1:61e489e8bf2eba85a08a3cddba119e085785d7aeb2c119675348887ef215a02d"
   name = "google.golang.org/genproto"
   packages = [
     "googleapis/api/annotations",
     "googleapis/bigtable/admin/v2",
     "googleapis/bigtable/v2",
+    "googleapis/cloud/kms/v1",
     "googleapis/datastore/v1",
     "googleapis/iam/v1",
     "googleapis/longrunning",
@@ -491,6 +493,7 @@
   input-imports = [
     "cloud.google.com/go/bigtable",
     "cloud.google.com/go/datastore",
+    "cloud.google.com/go/kms/apiv1",
     "cloud.google.com/go/pubsub",
     "cloud.google.com/go/storage",
     "github.com/antlr/antlr4/runtime/Go/antlr",

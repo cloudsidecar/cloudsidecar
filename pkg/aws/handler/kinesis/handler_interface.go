@@ -1,6 +1,7 @@
 package kinesis
 
 import (
+	"cloud.google.com/go/kms/apiv1"
 	"cloud.google.com/go/pubsub"
 	"context"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
@@ -10,6 +11,7 @@ import (
 type Handler struct {
 	KinesisClient *kinesis.Kinesis
 	GCPClient *pubsub.Client
+	GCPKMSClient *kms.KeyManagementClient
 	Context *context.Context
 	Config *viper.Viper
 }
