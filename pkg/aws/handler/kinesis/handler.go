@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"google.golang.org/genproto/googleapis/cloud/kms/v1"
 	"net/http"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ type KinesisHandler struct {
 
 const GcpShardId string = "shard-0"
 const GcpPartitionKey string = "partitionKey"
+const GetRecordCountLimit int = 10000
 
 type Kinesis interface {
 	StartStreamEncryptionParseInput(r *http.Request) (*kinesis.StartStreamEncryptionInput, error)
@@ -105,6 +107,25 @@ func (handler *KinesisHandler) StartStreamEncryptionHandle(writer http.ResponseW
 	writer.WriteHeader(200)
 }
 
+func (handler *KinesisHandler) tryToDecrypt(topicName string, message []byte) ([]byte, error) {
+	keyMap := handler.Config.GetStringMapString("gcp_destination_config.pub_sub_config.topic_kms_map")
+	logging.Log.Debugf("Found keymap looking for %s %s", keyMap, topicName)
+	kvmKey := keyMap[topicName]
+	if kvmKey != "" {
+		req := &kms.DecryptRequest{
+			Name: kvmKey,
+			Ciphertext: message,
+		}
+		resp, err := handler.GCPKMSClient.Decrypt(*handler.Context, req)
+		if err != nil {
+			return nil, err
+		} else {
+			return resp.Plaintext, nil
+		}
+	}
+	return message, nil
+}
+
 func (handler *KinesisHandler) GetRecordsParseInput(r *http.Request) (*kinesis.GetRecordsInput, error) {
 	decoder := json.NewDecoder(r.Body)
 	var payload kinesis.GetRecordsInput
@@ -133,11 +154,11 @@ func (handler *KinesisHandler) GetRecordsHandle(writer http.ResponseWriter, requ
 		timeoutDuration, _ := time.ParseDuration(timeoutConfig)
 		cctx, cancel := context.WithTimeout(cancelContext, timeoutDuration)
 
-		maxCount := int64(10000)
+		maxCount := int64(GetRecordCountLimit)
 		if payload.Limit != nil {
-			if *payload.Limit > 10000 {
+			if *payload.Limit > int64(GetRecordCountLimit) {
 				writer.WriteHeader(400)
-				writer.Write([]byte("Payload must be less than 10000"))
+				writer.Write([]byte(fmt.Sprintf("Payload must be less than %d", GetRecordCountLimit)))
 				return
 			}
 			maxCount = *payload.Limit
@@ -151,21 +172,37 @@ func (handler *KinesisHandler) GetRecordsHandle(writer http.ResponseWriter, requ
 		gcpPartitionKey := GcpPartitionKey
 		logging.Log.Debugf("Waiting maxcount %d", maxCount)
 		subscription := handler.GCPClient.Subscription(*payload.ShardIterator)
+		subscriptionInfo, err := subscription.Config(*handler.Context)
+		if err != nil {
+			writer.WriteHeader(400)
+			writer.Write([]byte(fmt.Sprint(err)))
+			return
+		}
+		topicPieces := strings.Split(subscriptionInfo.Topic.ID(), "/")
+		topic := topicPieces[len(topicPieces) - 1]
 		subscription.ReceiveSettings.MaxOutstandingMessages = int(maxCount)
 		subscription.ReceiveSettings.NumGoroutines = 1
 		subscription.ReceiveSettings.Synchronous = true
-		err := subscription.Receive(cctx, func(context context.Context, message *pubsub.Message) {
+		err = subscription.Receive(cctx, func(context context.Context, message *pubsub.Message) {
 			lock.Lock()
 			defer lock.Unlock()
 			logging.Log.Debugf("Received %s", message.Data)
 			if readCount >= maxCount {
 				logging.Log.Debugf("Skipping message over max")
 			} else {
-				records[readCount] = kinesis.Record{
+				record := kinesis.Record{
 					PartitionKey: &gcpPartitionKey,
 					SequenceNumber: &message.ID,
 					Data: message.Data,
 				}
+				data, err := handler.tryToDecrypt(topic, message.Data)
+				if err != nil {
+					writer.WriteHeader(400)
+					writer.Write([]byte(fmt.Sprint(err)))
+					return
+				}
+				record.Data = data
+				records[readCount] = record
 				message.Ack()
 			}
 			readCount ++
@@ -402,6 +439,25 @@ func (handler *KinesisHandler) CreateStreamHandle(writer http.ResponseWriter, re
 	writer.WriteHeader(200)
 }
 
+func (handler *KinesisHandler) gcpPublish(topic *pubsub.Topic, topicName string, message *pubsub.Message) (*pubsub.PublishResult, error) {
+	keyMap := handler.Config.GetStringMapString("gcp_destination_config.pub_sub_config.topic_kms_map")
+	logging.Log.Debugf("Found keymap looking for %s %s", keyMap, topicName)
+	kvmKey := keyMap[topicName]
+	if kvmKey != "" {
+		req := &kms.EncryptRequest{
+			Name: kvmKey,
+			Plaintext: message.Data,
+		}
+		resp, err := handler.GCPKMSClient.Encrypt(*handler.Context, req)
+		if err != nil {
+			return nil, err
+		} else {
+			message.Data = resp.Ciphertext
+		}
+	}
+	return topic.Publish(*handler.Context, message), nil
+}
+
 func (handler *KinesisHandler) PublishParseInput(r *http.Request) (*response_type.KinesisRequest, error) {
 	decoder := json.NewDecoder(r.Body)
 	var payload response_type.KinesisRequest
@@ -424,9 +480,16 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 	if payload.Data != "" {
 		str, _ := base64.StdEncoding.DecodeString(payload.Data)
 		if handler.GCPClient != nil {
-			response, err := handler.GCPClient.Topic(payload.StreamName).Publish(*handler.Context, &pubsub.Message{
+			req, err := handler.gcpPublish(handler.GCPClient.Topic(payload.StreamName), payload.StreamName, &pubsub.Message{
 				Data: str,
-			}).Get(*handler.Context)
+			})
+			if err != nil {
+				logging.Log.Error("Error sending", err)
+				writer.WriteHeader(400)
+				writer.Write([]byte(fmt.Sprint(err)))
+				return
+			}
+			response, err := req.Get(*handler.Context)
 			if err != nil {
 				logging.Log.Error("Error sending", err)
 				writer.WriteHeader(400)
@@ -463,11 +526,19 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 			results := make([]*pubsub.PublishResult, len(payload.Records))
 			var wg sync.WaitGroup
 			wg.Add(len(payload.Records))
+			topic := handler.GCPClient.Topic(payload.StreamName)
 			for i, record := range payload.Records {
 				str, _ := base64.StdEncoding.DecodeString(record.Data)
-				results[i] = handler.GCPClient.Topic(payload.StreamName).Publish(*handler.Context, &pubsub.Message{
+				req, err := handler.gcpPublish(topic, payload.StreamName, &pubsub.Message{
 					Data: str,
 				})
+				if err != nil {
+					logging.Log.Error("Error sending", err)
+					writer.WriteHeader(400)
+					writer.Write([]byte(fmt.Sprint(err)))
+					return
+				}
+				results[i] = req
 				go func (i int, c <-chan struct{}) {
 					<- c
 					wg.Done()

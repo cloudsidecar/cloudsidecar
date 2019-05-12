@@ -3,6 +3,7 @@ package server
 import (
 	"cloud.google.com/go/bigtable"
 	"cloud.google.com/go/datastore"
+	"cloud.google.com/go/kms/apiv1"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 	awshandler "cloudsidecar/pkg/aws/handler"
@@ -51,6 +52,10 @@ func newGCPStorageRawKey(ctx context.Context, rawKey string) (*storage.Client, e
 
 func newGCPPubSub(ctx context.Context, project string, keyFileLocation string) (*pubsub.Client, error) {
 	return pubsub.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
+}
+
+func newGCPKmsClient(ctx context.Context, keyFileLocation string) (*kms.KeyManagementClient, error) {
+	return kms.NewKeyManagementClient(ctx, option.WithCredentialsFile(keyFileLocation))
 }
 
 func newGCPBigTable(ctx context.Context, project string, instance string, keyFileLocation string) (*bigtable.Client, error) {
@@ -178,7 +183,12 @@ func Main(cmd *cobra.Command, args []string) {
 				if err != nil {
 					panic(fmt.Sprintln("Error setting up gcp client", err))
 				}
+				gcpKmsClient, err := newGCPKmsClient(ctx, *awsConfig.DestinationGCPConfig.KeyFileLocation)
+				if err != nil {
+					panic(fmt.Sprintln("Error setting up gcp client", err))
+				}
 				handler.GCPClient = gcpClient
+				handler.GCPKMSClient = gcpKmsClient
 				handler.Context = &ctx
 			}
 			awsHandlers[key] = &handler
