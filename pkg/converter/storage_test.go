@@ -2,15 +2,15 @@ package converter
 
 import (
 	"cloud.google.com/go/storage"
+	"cloudsidecar/pkg/mock"
+	"cloudsidecar/pkg/response_type"
 	"crypto/md5"
-	"encoding/base64"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
-	"cloudsidecar/pkg/mock"
-	"cloudsidecar/pkg/response_type"
 	"strings"
 	"testing"
 	"time"
@@ -63,7 +63,7 @@ func TestGCSAttrToCombine(t *testing.T) {
 	}
 	output := GCSAttrToCombine(attrs)
 	assert.Equal(t, attrs.Bucket, *output.Bucket)
-	assert.Equal(t, base64.StdEncoding.EncodeToString(hash[:]), *output.ETag)
+	assert.Equal(t, fmt.Sprintf("%x", hash), *output.ETag)
 	assert.Equal(t, attrs.Name, *output.Key)
 }
 
