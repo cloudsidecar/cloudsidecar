@@ -10,7 +10,7 @@ import (
 
 type Handler struct {
 	KinesisClient *kinesis.Kinesis
-	GCPClient *pubsub.Client
+	GCPClient GCPClient
 	GCPKMSClient *kms.KeyManagementClient
 	Context *context.Context
 	Config *viper.Viper
@@ -18,11 +18,11 @@ type Handler struct {
 
 type HandlerInterface interface {
 	GetKinesisClient() *kinesis.Kinesis
-	GetGCPClient() *pubsub.Client
+	GetGCPClient() GCPClient
 	GetContext() *context.Context
 	GetConfig() *viper.Viper
 	SetKinesisClient(kinesisClient *kinesis.Kinesis)
-	SetGCPClient(gcpClient *pubsub.Client)
+	SetGCPClient(gcpClient GCPClient)
 	SetContext(context *context.Context)
 	SetConfig(config *viper.Viper)
 }
@@ -30,7 +30,7 @@ type HandlerInterface interface {
 func (handler *Handler) GetKinesisClient() *kinesis.Kinesis {
 	return handler.KinesisClient
 }
-func (handler *Handler) GetGCPClient() *pubsub.Client {
+func (handler *Handler) GetGCPClient() GCPClient {
 	return handler.GCPClient
 }
 func (handler *Handler) GetContext() *context.Context{
@@ -42,7 +42,7 @@ func (handler *Handler) GetConfig() *viper.Viper {
 func (handler *Handler) SetKinesisClient(kinesisClient *kinesis.Kinesis){
 	handler.KinesisClient = kinesisClient
 }
-func (handler *Handler) SetGCPClient(gcpClient *pubsub.Client) {
+func (handler *Handler) SetGCPClient(gcpClient GCPClient) {
 	handler.GCPClient = gcpClient
 }
 func (handler *Handler) SetContext(context *context.Context) {
@@ -50,4 +50,12 @@ func (handler *Handler) SetContext(context *context.Context) {
 }
 func (handler *Handler) SetConfig(config *viper.Viper) {
 	handler.Config = config
+}
+
+type GCPClient interface {
+	CreateSubscription(ctx context.Context, id string, cfg pubsub.SubscriptionConfig) (*pubsub.Subscription, error)
+	Subscription(id string) *pubsub.Subscription
+	Topic(id string) *pubsub.Topic
+	CreateTopic(ctx context.Context, id string) (*pubsub.Topic, error)
+	Close() error
 }
