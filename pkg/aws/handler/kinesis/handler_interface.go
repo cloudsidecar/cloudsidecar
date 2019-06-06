@@ -11,6 +11,8 @@ import (
 type Handler struct {
 	KinesisClient *kinesis.Kinesis
 	GCPClient GCPClient
+	GCPClientToTopic func(topic string, client GCPClient) GCPTopic
+	GCPResultWrapper func(result *pubsub.PublishResult) GCPPublishResult
 	GCPKMSClient *kms.KeyManagementClient
 	Context *context.Context
 	Config *viper.Viper
@@ -58,4 +60,15 @@ type GCPClient interface {
 	Topic(id string) *pubsub.Topic
 	CreateTopic(ctx context.Context, id string) (*pubsub.Topic, error)
 	Close() error
+}
+
+type GCPTopic interface {
+	Delete(ctx context.Context) error
+	Config(ctx context.Context) (pubsub.TopicConfig, error)
+	Publish(ctx context.Context, msg *pubsub.Message) *pubsub.PublishResult
+}
+
+type GCPPublishResult interface {
+	Ready() <-chan struct{}
+	Get(ctx context.Context) (serverID string, err error)
 }
