@@ -219,3 +219,15 @@ func TestKinesisHandler_PublishHandle(t *testing.T) {
 	handler.PublishHandle(writerMock, req)
 }
 
+func TestKinesisHandler_GetRecordsParseInput(t *testing.T) {
+	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
+	fakeReader := ioutil.NopCloser(strings.NewReader("{\"ShardIterator\" : \"my_shard\", \"Limit\": 123}"))
+	req := &http.Request{
+		URL: testUrl,
+		Body:fakeReader,
+	}
+	handler := New(nil)
+	result, _ := handler.GetRecordsParseInput(req)
+	assert.Equal(t, "my_shard", *result.ShardIterator)
+	assert.Equal(t, int64(123), *result.Limit)
+}
