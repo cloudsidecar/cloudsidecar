@@ -105,3 +105,126 @@ func (mr *MockGCPClientMockRecorder) Topic(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Topic", reflect.TypeOf((*MockGCPClient)(nil).Topic), arg0)
 }
+
+
+
+// MockGCPTopic is a mock of GCPTopic interface
+type MockGCPTopic struct {
+	ctrl     *gomock.Controller
+	recorder *MockGCPTopicMockRecorder
+}
+
+// MockGCPTopicMockRecorder is the mock recorder for MockGCPTopic
+type MockGCPTopicMockRecorder struct {
+	mock *MockGCPTopic
+}
+
+// NewMockGCPTopic creates a new mock instance
+func NewMockGCPTopic(ctrl *gomock.Controller) *MockGCPTopic {
+	mock := &MockGCPTopic{ctrl: ctrl}
+	mock.recorder = &MockGCPTopicMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use
+func (m *MockGCPTopic) EXPECT() *MockGCPTopicMockRecorder {
+	return m.recorder
+}
+
+// Config mocks base method
+func (m *MockGCPTopic) Config(arg0 context.Context) (pubsub.TopicConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Config", arg0)
+	ret0, _ := ret[0].(pubsub.TopicConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Config indicates an expected call of Config
+func (mr *MockGCPTopicMockRecorder) Config(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockGCPTopic)(nil).Config), arg0)
+}
+
+// Delete mocks base method
+func (m *MockGCPTopic) Delete(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete
+func (mr *MockGCPTopicMockRecorder) Delete(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockGCPTopic)(nil).Delete), arg0)
+}
+
+// Publish mocks base method
+func (m *MockGCPTopic) Publish(arg0 context.Context, arg1 *pubsub.Message) *pubsub.PublishResult {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Publish", arg0, arg1)
+	ret0, _ := ret[0].(*pubsub.PublishResult)
+	return ret0
+}
+
+// Publish indicates an expected call of Publish
+func (mr *MockGCPTopicMockRecorder) Publish(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockGCPTopic)(nil).Publish), arg0, arg1)
+}
+
+
+
+// MockGCPPublishResult is a mock of GCPPublishResult interface
+type MockGCPPublishResult struct {
+	ctrl     *gomock.Controller
+	recorder *MockGCPPublishResultMockRecorder
+}
+
+// MockGCPPublishResultMockRecorder is the mock recorder for MockGCPPublishResult
+type MockGCPPublishResultMockRecorder struct {
+	mock *MockGCPPublishResult
+}
+
+// NewMockGCPPublishResult creates a new mock instance
+func NewMockGCPPublishResult(ctrl *gomock.Controller) *MockGCPPublishResult {
+	mock := &MockGCPPublishResult{ctrl: ctrl}
+	mock.recorder = &MockGCPPublishResultMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use
+func (m *MockGCPPublishResult) EXPECT() *MockGCPPublishResultMockRecorder {
+	return m.recorder
+}
+
+// Get mocks base method
+func (m *MockGCPPublishResult) Get(arg0 context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get
+func (mr *MockGCPPublishResultMockRecorder) Get(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockGCPPublishResult)(nil).Get), arg0)
+}
+
+// Ready mocks base method
+func (m *MockGCPPublishResult) Ready() <-chan struct{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ready")
+	ret0, _ := ret[0].(<-chan struct{})
+	return ret0
+}
+
+// Ready indicates an expected call of Ready
+func (mr *MockGCPPublishResultMockRecorder) Ready() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ready", reflect.TypeOf((*MockGCPPublishResult)(nil).Ready))
+}
+

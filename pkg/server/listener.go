@@ -173,6 +173,12 @@ func Main(cmd *cobra.Command, args []string) {
 			handler := kinesishandler.Handler{
 				KinesisClient: svc,
 				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
+				GCPClientToTopic: func(topic string, client kinesishandler.GCPClient) kinesishandler.GCPTopic {
+					return client.Topic(topic)
+				},
+				GCPResultWrapper: func(result *pubsub.PublishResult) kinesishandler.GCPPublishResult {
+					return result
+				},
 			}
 			if awsConfig.DestinationGCPConfig != nil {
 				gcpClient, err := newGCPPubSub(

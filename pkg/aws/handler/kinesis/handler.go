@@ -314,7 +314,7 @@ func (handler *KinesisHandler) DescribeHandle(writer http.ResponseWriter, reques
 	}
 	var output *kinesis.DescribeStreamOutput
 	if handler.GCPClient != nil {
-		_, err := handler.GCPClient.Topic(*payload.StreamName).Config(*handler.Context)
+		_, err := handler.GCPClientToTopic(*payload.StreamName, handler.GCPClient).Config(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(400)
 			writer.Write([]byte(fmt.Sprint(err)))
@@ -369,7 +369,7 @@ func (handler *KinesisHandler) DeleteStreamHandle(writer http.ResponseWriter, re
 		return
 	}
 	if handler.GCPClient != nil {
-		err := handler.GCPClient.Topic(*payload.StreamName).Delete(*handler.Context)
+		err := handler.GCPClientToTopic(*payload.StreamName, handler.GCPClient).Delete(*handler.Context)
 		if err != nil {
 			logging.Log.Error("Error Deleting", err)
 			writer.WriteHeader(400)
@@ -439,7 +439,7 @@ func (handler *KinesisHandler) CreateStreamHandle(writer http.ResponseWriter, re
 	writer.WriteHeader(200)
 }
 
-func (handler *KinesisHandler) gcpPublish(topic *pubsub.Topic, topicName string, message *pubsub.Message) (*pubsub.PublishResult, error) {
+func (handler *KinesisHandler) gcpPublish(topic GCPTopic, topicName string, message *pubsub.Message) (GCPPublishResult, error) {
 	keyMap := handler.Config.GetStringMapString("gcp_destination_config.pub_sub_config.topic_kms_map")
 	logging.Log.Debugf("Found keymap looking for %s %s", keyMap, topicName)
 	kvmKey := keyMap[topicName]
@@ -455,7 +455,7 @@ func (handler *KinesisHandler) gcpPublish(topic *pubsub.Topic, topicName string,
 			message.Data = resp.Ciphertext
 		}
 	}
-	return topic.Publish(*handler.Context, message), nil
+	return handler.GCPResultWrapper(topic.Publish(*handler.Context, message)), nil
 }
 
 func (handler *KinesisHandler) PublishParseInput(r *http.Request) (*response_type.KinesisRequest, error) {
@@ -480,7 +480,8 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 	if payload.Data != "" {
 		str, _ := base64.StdEncoding.DecodeString(payload.Data)
 		if handler.GCPClient != nil {
-			req, err := handler.gcpPublish(handler.GCPClient.Topic(payload.StreamName), payload.StreamName, &pubsub.Message{
+			topic := handler.GCPClientToTopic(payload.StreamName, handler.GCPClient)
+			req, err := handler.gcpPublish(topic, payload.StreamName, &pubsub.Message{
 				Data: str,
 			})
 			if err != nil {
@@ -523,10 +524,10 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 		}
 	} else if len(payload.Records) > 0 {
 		if handler.GCPClient != nil {
-			results := make([]*pubsub.PublishResult, len(payload.Records))
+			results := make([]GCPPublishResult, len(payload.Records))
 			var wg sync.WaitGroup
 			wg.Add(len(payload.Records))
-			topic := handler.GCPClient.Topic(payload.StreamName)
+			topic := handler.GCPClientToTopic(payload.StreamName, handler.GCPClient)
 			for i, record := range payload.Records {
 				str, _ := base64.StdEncoding.DecodeString(record.Data)
 				req, err := handler.gcpPublish(topic, payload.StreamName, &pubsub.Message{
