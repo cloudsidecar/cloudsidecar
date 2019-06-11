@@ -7,7 +7,6 @@ import (
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 	awshandler "cloudsidecar/pkg/aws/handler"
-	dynamohandler "cloudsidecar/pkg/aws/handler/dynamo"
 	kinesishandler "cloudsidecar/pkg/aws/handler/kinesis"
 	s3handler "cloudsidecar/pkg/aws/handler/s3"
 	"cloudsidecar/pkg/aws/handler/s3/bucket"
@@ -20,7 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/defaults"
 	"github.com/aws/aws-sdk-go-v2/aws/endpoints"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fsnotify/fsnotify"
@@ -200,40 +198,6 @@ func Main(cmd *cobra.Command, args []string) {
 			awsHandlers[key] = &handler
 			wrappedHandler := kinesishandler.New(&handler)
 			wrappedHandler.Register(r)
-		} else if awsConfig.ServiceType == "dynamo" {
-			svc := dynamodb.New(configs)
-			handler := dynamohandler.Handler{
-				DynamoClient: svc,
-				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
-			}
-			if awsConfig.DestinationGCPConfig != nil {
-				if awsConfig.DestinationGCPConfig.IsBigTable{
-					gcpClient, err := newGCPBigTable(
-						ctx,
-						awsConfig.DestinationGCPConfig.Project,
-						awsConfig.DestinationGCPConfig.Instance,
-						*awsConfig.DestinationGCPConfig.KeyFileLocation,
-					)
-					if err != nil {
-						panic(fmt.Sprintln("Error setting up gcp client", err))
-					}
-					handler.GCPBigTableClient = gcpClient
-				} else if awsConfig.DestinationGCPConfig.DatastoreConfig != nil {
-					gcpClient, err := newGCPDatastore(
-						ctx,
-						awsConfig.DestinationGCPConfig.Project,
-						*awsConfig.DestinationGCPConfig.KeyFileLocation,
-					)
-					if err != nil {
-						panic(fmt.Sprintln("Error setting up gcp client", err))
-					}
-					handler.GCPDatastoreClient = gcpClient
-				}
-				handler.Context = &ctx
-			}
-			awsHandlers[key] = &handler
-			handlerWrapper := dynamohandler.New(&handler)
-			handlerWrapper.Register(r)
 		} else if awsConfig.ServiceType == "" {
 			logging.Log.Error("No service type configured for port ", awsConfig.Port)
 		} else if enterpriseSystem.RegisterHandler(awsConfig, r, serverWaitGroup){
