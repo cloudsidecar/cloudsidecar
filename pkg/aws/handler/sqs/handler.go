@@ -52,6 +52,10 @@ type HandlerInterface interface {
 	SendHandleParseInput(r *http.Request) (*sqs.SendMessageInput, error)
 	ReceiveHandle(writer http.ResponseWriter, request *http.Request)
 	ReceiveHandleParseInput(r *http.Request) (*sqs.ReceiveMessageInput, error)
+	DeleteMessageHandle(writer http.ResponseWriter, request *http.Request)
+	DeleteMessageHandleParseInput(r *http.Request) (*sqs.DeleteMessageInput, error)
+	DeleteMessageBatchHandle(writer http.ResponseWriter, request *http.Request)
+	DeleteMessageBatchHandleParseInput(r *http.Request) (*sqs.DeleteMessageBatchInput, error)
 }
 
 func (handler *Handler) GetSqsClient() *sqs.SQS {
@@ -105,6 +109,10 @@ func (handler *Handler) Handle(writer http.ResponseWriter, request *http.Request
 		handler.SendHandle(writer, request)
 	} else if action == "ReceiveMessage" {
 		handler.ReceiveHandle(writer, request)
+	} else if action == "DeleteMessage" {
+		handler.DeleteMessageHandle(writer, request)
+	} else if action == "DeleteMessageBatch" {
+		handler.DeleteMessageBatchHandle(writer, request)
 	}
 }
 
@@ -435,6 +443,97 @@ func (handler *Handler) ReceiveHandleParseInput(r *http.Request) (*sqs.ReceiveMe
 	}
 	if len(messageAttributes) > 0 {
 		input.MessageAttributeNames = messageAttributes
+	}
+	return input, nil
+}
+
+func (handler *Handler) DeleteMessageHandle(writer http.ResponseWriter, request *http.Request) {
+	params, err := handler.DeleteMessageHandleParseInput(request)
+	if err != nil {
+		writer.WriteHeader(400)
+		writer.Write([]byte(fmt.Sprint(err)))
+		return
+	}
+	var response *response_type.DeleteMessageResponse
+	if handler.GCPClient != nil {
+
+	} else {
+		_, err := handler.SqsClient.DeleteMessageRequest(params).Send()
+		if err != nil {
+			logging.Log.Errorf("Error deleting queue AWS %s", err)
+			processError(err, writer)
+			return
+		}
+		response = &response_type.DeleteMessageResponse{}
+	}
+	output, _ := xml.Marshal(response)
+	logging.Log.Debugf("Writing %s", string(output))
+	writer.Write([]byte(response_type.XmlHeader))
+	writer.Write([]byte(string(output)))
+}
+func (handler *Handler) DeleteMessageHandleParseInput(r *http.Request) (*sqs.DeleteMessageInput, error) {
+	url := r.Form.Get("QueueUrl")
+	receipt := r.Form.Get("ReceiptHandle")
+	return &sqs.DeleteMessageInput{
+		QueueUrl: &url,
+		ReceiptHandle: &receipt,
+	}, nil
+}
+
+func (handler *Handler) DeleteMessageBatchHandle(writer http.ResponseWriter, request *http.Request) {
+	params, err := handler.DeleteMessageBatchHandleParseInput(request)
+	if err != nil {
+		writer.WriteHeader(400)
+		writer.Write([]byte(fmt.Sprint(err)))
+		return
+	}
+	var response *response_type.DeleteMessageBatchResponse
+	if handler.GCPClient != nil {
+
+	} else {
+		resp, err := handler.SqsClient.DeleteMessageBatchRequest(params).Send()
+		if err != nil {
+			logging.Log.Errorf("Error deleting queue AWS %s", err)
+			processError(err, writer)
+			return
+		}
+
+		response = &response_type.DeleteMessageBatchResponse{}
+		entries := make([]response_type.DeleteMessageBatchResultEntry, len(resp.Successful))
+		for i, item := range resp.Successful {
+			entries[i] = response_type.DeleteMessageBatchResultEntry{
+				Id: item.Id,
+			}
+		}
+		response.DeleteMessageBatchResult = response_type.DeleteMessageBatchResult{
+			DeleteMessageBatchResultEntry: entries,
+		}
+	}
+	output, _ := xml.Marshal(response)
+	logging.Log.Debugf("Writing %s", string(output))
+	writer.Write([]byte(response_type.XmlHeader))
+	writer.Write([]byte(string(output)))
+}
+func (handler *Handler) DeleteMessageBatchHandleParseInput(r *http.Request) (*sqs.DeleteMessageBatchInput, error) {
+	url := r.Form.Get("QueueUrl")
+	messageAttributes := make([]sqs.DeleteMessageBatchRequestEntry, 0)
+	input := &sqs.DeleteMessageBatchInput{
+		QueueUrl: &url,
+
+	}
+	for key, formValue := range r.Form {
+		if strings.HasPrefix(key, "DeleteMessageBatchRequestEntry") && strings.Contains(key, "Id") {
+			keyValue := formValue[0]
+			receiptKey := strings.Replace(key, "Id", "ReceiptHandle", 1)
+			receiptValue := r.Form.Get(receiptKey)
+			messageAttributes = append(messageAttributes, sqs.DeleteMessageBatchRequestEntry{
+				Id: &keyValue,
+				ReceiptHandle: &receiptValue,
+			})
+		}
+	}
+	if len(messageAttributes) > 0 {
+		input.Entries = messageAttributes
 	}
 	return input, nil
 }

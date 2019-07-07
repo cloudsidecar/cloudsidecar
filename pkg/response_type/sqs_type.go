@@ -80,4 +80,19 @@ type SqsAttribute struct {
 	Value string `xml:"Value"`
 }
 
+type DeleteMessageResponse struct {
+	XMLName xml.Name `xml:"DeleteMessageResponse"`
+}
 
+type DeleteMessageBatchResponse struct {
+	XMLName xml.Name `xml:"DeleteMessageBatchResponse"`
+	DeleteMessageBatchResult DeleteMessageBatchResult `xml:"DeleteMessageBatchResult"`
+}
+
+type DeleteMessageBatchResult struct {
+	DeleteMessageBatchResultEntry []DeleteMessageBatchResultEntry `xml:"DeleteMessageBatchResultEntry"`
+}
+
+type DeleteMessageBatchResultEntry struct {
+	Id *string `xml:"Id"`
+}
