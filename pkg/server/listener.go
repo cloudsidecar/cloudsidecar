@@ -11,6 +11,7 @@ import (
 	s3handler "cloudsidecar/pkg/aws/handler/s3"
 	"cloudsidecar/pkg/aws/handler/s3/bucket"
 	"cloudsidecar/pkg/aws/handler/s3/object"
+	csSqs "cloudsidecar/pkg/aws/handler/sqs"
 	conf "cloudsidecar/pkg/config"
 	"cloudsidecar/pkg/enterprise"
 	"cloudsidecar/pkg/logging"
@@ -21,6 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/endpoints"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
@@ -170,7 +172,7 @@ func Main(cmd *cobra.Command, args []string) {
 			svc := kinesis.New(configs)
 			handler := kinesishandler.Handler{
 				KinesisClient: svc,
-				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
+				Config:        viper.Sub(fmt.Sprint("aws_configs.", key)),
 				GCPClientToTopic: func(topic string, client kinesishandler.GCPClient) kinesishandler.GCPTopic {
 					return client.Topic(topic)
 				},
@@ -198,6 +200,20 @@ func Main(cmd *cobra.Command, args []string) {
 			awsHandlers[key] = &handler
 			wrappedHandler := kinesishandler.New(&handler)
 			wrappedHandler.Register(r)
+		} else if awsConfig.ServiceType == "sqs" {
+			svc := sqs.New(configs)
+			handler := csSqs.Handler{
+				SqsClient: svc,
+				Config:        viper.Sub(fmt.Sprint("aws_configs.", key)),
+				GCPClientToTopic: func(topic string, client kinesishandler.GCPClient) kinesishandler.GCPTopic {
+					return client.Topic(topic)
+				},
+				GCPResultWrapper: func(result *pubsub.PublishResult) kinesishandler.GCPPublishResult {
+					return result
+				},
+			}
+			awsHandlers[key] = &handler
+			handler.Register(r)
 		} else if awsConfig.ServiceType == "" {
 			logging.Log.Error("No service type configured for port ", awsConfig.Port)
 		} else if enterpriseSystem.RegisterHandler(awsConfig, r, serverWaitGroup){
