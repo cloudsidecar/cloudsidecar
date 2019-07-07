@@ -37,7 +37,7 @@
   version = "4.7.2"
 
 [[projects]]
-  digest = "1:127304e6078157c789cb41226d3944135a692abbd07e1713c5e7e46cb4052ef6"
+  digest = "1:3d0c336547ad516f3fc5b9138ea304c85ab6db947ba950c27359417350c70121"
   name = "github.com/aws/aws-sdk-go-v2"
   packages = [
     "aws",
@@ -56,11 +56,11 @@
     "private/protocol/restxml",
     "private/protocol/xml",
     "private/protocol/xml/xmlutil",
-    "service/dynamodb",
     "service/kinesis",
     "service/s3",
     "service/s3/s3iface",
     "service/s3/s3manager",
+    "service/sqs",
   ]
   pruneopts = "UT"
   revision = "0143dbcf72cf30047f4830d714f7511e74d44034"
@@ -500,11 +500,11 @@
     "github.com/aws/aws-sdk-go-v2/aws",
     "github.com/aws/aws-sdk-go-v2/aws/defaults",
     "github.com/aws/aws-sdk-go-v2/aws/endpoints",
-    "github.com/aws/aws-sdk-go-v2/service/dynamodb",
     "github.com/aws/aws-sdk-go-v2/service/kinesis",
     "github.com/aws/aws-sdk-go-v2/service/s3",
     "github.com/aws/aws-sdk-go-v2/service/s3/s3iface",
     "github.com/aws/aws-sdk-go-v2/service/s3/s3manager",
+    "github.com/aws/aws-sdk-go-v2/service/sqs",
     "github.com/fsnotify/fsnotify",
     "github.com/golang/mock/gomock",
     "github.com/google/uuid",
