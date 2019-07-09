@@ -96,3 +96,19 @@ type DeleteMessageBatchResult struct {
 type DeleteMessageBatchResultEntry struct {
 	Id *string `xml:"Id"`
 }
+
+type SendMessageBatchResponse struct {
+	XMLName xml.Name `xml:"SendMessageBatchResponse"`
+	SendMessageBatchResult SendMessageBatchResult `xml:"SendMessageBatchResult"`
+}
+
+type SendMessageBatchResult struct {
+	Entries []SendMessageBatchResultEntry `xml:"SendMessageBatchResultEntry"`
+}
+
+type SendMessageBatchResultEntry struct {
+	Id *string `xml:"Id"`
+	MessageId *string `xml:"MessageId"`
+	MD5OfMessageBody *string `xml:"MD5OfMessageBody"`
+	MD5OfMessageAttributes *string `xml:"MD5OfMessageAttributes"`
+}
