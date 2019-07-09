@@ -50,12 +50,19 @@ type HandlerInterface interface {
 	DeleteHandleParseInput(r *http.Request) (*sqs.DeleteQueueInput, error)
 	SendHandle(writer http.ResponseWriter, request *http.Request)
 	SendHandleParseInput(r *http.Request) (*sqs.SendMessageInput, error)
+	SendBatchHandle(writer http.ResponseWriter, request *http.Request)
+	SendBatchHandleParseInput(r *http.Request) (*sqs.SendMessageBatchInput, error)
 	ReceiveHandle(writer http.ResponseWriter, request *http.Request)
 	ReceiveHandleParseInput(r *http.Request) (*sqs.ReceiveMessageInput, error)
 	DeleteMessageHandle(writer http.ResponseWriter, request *http.Request)
 	DeleteMessageHandleParseInput(r *http.Request) (*sqs.DeleteMessageInput, error)
 	DeleteMessageBatchHandle(writer http.ResponseWriter, request *http.Request)
 	DeleteMessageBatchHandleParseInput(r *http.Request) (*sqs.DeleteMessageBatchInput, error)
+}
+
+type MessageAttributeNameAndValue struct {
+	Name *string
+	Value *sqs.MessageAttributeValue
 }
 
 func (handler *Handler) GetSqsClient() *sqs.SQS {
@@ -113,6 +120,8 @@ func (handler *Handler) Handle(writer http.ResponseWriter, request *http.Request
 		handler.DeleteMessageHandle(writer, request)
 	} else if action == "DeleteMessageBatch" {
 		handler.DeleteMessageBatchHandle(writer, request)
+	} else if action == "SendMessageBatch" {
+		handler.SendBatchHandle(writer, request)
 	}
 }
 
@@ -315,7 +324,7 @@ func (handler *Handler) SendHandle(writer http.ResponseWriter, request *http.Req
 	} else {
 		resp, err := handler.SqsClient.SendMessageRequest(params).Send()
 		if err != nil {
-			logging.Log.Errorf("Error purging queue AWS %s", err)
+			logging.Log.Errorf("Error sending AWS %s", err)
 			processError(err, writer)
 			return
 		}
@@ -366,6 +375,103 @@ func (handler *Handler) SendHandleParseInput(r *http.Request) (*sqs.SendMessageI
 
 }
 
+func (handler *Handler) SendBatchHandle(writer http.ResponseWriter, request *http.Request) {
+	params, err := handler.SendBatchHandleParseInput(request)
+	if err != nil {
+		writer.WriteHeader(400)
+		writer.Write([]byte(fmt.Sprint(err)))
+		return
+	}
+	var response *response_type.SendMessageBatchResponse
+	if handler.GCPClient != nil {
+
+	} else {
+		logging.Log.Debugf("Sending %v", params)
+		resp, err := handler.SqsClient.SendMessageBatchRequest(params).Send()
+		if err != nil {
+			logging.Log.Errorf("Error sending batch AWS %s", err)
+			processError(err, writer)
+			return
+		}
+		entries := make([]response_type.SendMessageBatchResultEntry, len(resp.Successful))
+		for i, entry := range resp.Successful {
+			entries[i] = response_type.SendMessageBatchResultEntry{
+				Id: entry.Id,
+				MessageId: entry.MessageId,
+				MD5OfMessageAttributes: entry.MD5OfMessageAttributes,
+				MD5OfMessageBody: entry.MD5OfMessageBody,
+			}
+		}
+		response = &response_type.SendMessageBatchResponse{
+			SendMessageBatchResult: response_type.SendMessageBatchResult{
+				Entries: entries,
+			},
+		}
+	}
+	output, _ := xml.Marshal(response)
+	logging.Log.Debugf("Writing %s", string(output))
+	writer.Write([]byte(response_type.XmlHeader))
+	writer.Write([]byte(string(output)))
+}
+func (handler *Handler) SendBatchHandleParseInput(r *http.Request) (*sqs.SendMessageBatchInput, error) {
+	url := r.Form.Get("QueueUrl")
+	entries := make(map[string]*sqs.SendMessageBatchRequestEntry)
+	messageAttributes := make(map[string]map[string]*MessageAttributeNameAndValue)
+	for formKey, formValue := range r.Form {
+		if strings.HasPrefix(formKey, "SendMessageBatchRequestEntry") {
+			pieces := strings.SplitN(formKey, ".", 3)
+			entryIndex := pieces[1]
+			entryName := pieces[2]
+			entryValue := formValue[0]
+			if _, ok := entries[entryIndex]; !ok  {
+				entries[entryIndex] = &sqs.SendMessageBatchRequestEntry{}
+			}
+			if entryName == "Id" {
+				entries[entryIndex].Id = &entryValue
+			} else if entryName == "MessageBody" {
+				entries[entryIndex].MessageBody = &entryValue
+			} else if strings.Contains(entryName, "MessageAttribute"){
+				messageAttributePieces := strings.Split(entryName, ".")
+				messageAttributeIndex := messageAttributePieces[1]
+				if _, ok := messageAttributes[entryIndex]; !ok {
+					messageAttributes[entryIndex] = make(map[string]*MessageAttributeNameAndValue)
+					messageAttributes[entryIndex][messageAttributeIndex] = &MessageAttributeNameAndValue{
+						Value: &sqs.MessageAttributeValue{},
+					}
+				}
+				if messageAttributePieces[2] == "Name" {
+					messageAttributes[entryIndex][messageAttributeIndex].Name = &entryValue
+				} else if messageAttributePieces[2] == "Value" {
+					if messageAttributePieces[3] == "DataType" {
+						messageAttributes[entryIndex][messageAttributeIndex].Value.DataType = &entryValue
+					} else if messageAttributePieces[3] == "StringValue" {
+						messageAttributes[entryIndex][messageAttributeIndex].Value.StringValue = &entryValue
+					} else if messageAttributePieces[3] == "BinaryValue" {
+						messageAttributes[entryIndex][messageAttributeIndex].Value.BinaryValue = []byte(entryValue)
+					}
+				}
+			}
+		}
+	}
+	for attributeKey, attributeValue := range messageAttributes {
+		entries[attributeKey].MessageAttributes = make(map[string]sqs.MessageAttributeValue)
+		for _, messageAttribute := range attributeValue {
+			entries[attributeKey].MessageAttributes[*messageAttribute.Name] = *messageAttribute.Value
+		}
+	}
+	entriesList := make([]sqs.SendMessageBatchRequestEntry, len(entries))
+	entryIndex := 0
+	for _, entry := range entries {
+		entriesList[entryIndex] = *entry
+		entryIndex++
+	}
+	input := &sqs.SendMessageBatchInput{
+		QueueUrl: &url,
+		Entries: entriesList,
+	}
+	return input, nil
+}
+
 func (handler *Handler) ReceiveHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.ReceiveHandleParseInput(request)
 	if err != nil {
@@ -379,7 +485,7 @@ func (handler *Handler) ReceiveHandle(writer http.ResponseWriter, request *http.
 	} else {
 		resp, err := handler.SqsClient.ReceiveMessageRequest(params).Send()
 		if err != nil {
-			logging.Log.Errorf("Error purging queue AWS %s", err)
+			logging.Log.Errorf("Error receiving AWS %s", err)
 			processError(err, writer)
 			return
 		}
