@@ -200,6 +200,7 @@ func TestKinesisHandler_PublishHandle(t *testing.T) {
 		Data: []byte("bvrp"),
 	}
 	mockGcpTopic.EXPECT().Publish(ctx, message).Return(&pubsub.PublishResult{})
+	mockGcpTopic.EXPECT().Stop()
 	handler := &KinesisHandler{
 		&Handler{
 			GCPClient: mockGcpClient,
