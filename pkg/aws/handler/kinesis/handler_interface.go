@@ -66,6 +66,7 @@ type GCPTopic interface {
 	Delete(ctx context.Context) error
 	Config(ctx context.Context) (pubsub.TopicConfig, error)
 	Publish(ctx context.Context, msg *pubsub.Message) *pubsub.PublishResult
+	Stop()
 }
 
 type GCPPublishResult interface {

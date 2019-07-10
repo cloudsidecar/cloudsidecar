@@ -289,7 +289,9 @@ func (handler *Handler) PurgeHandle(writer http.ResponseWriter, request *http.Re
 	}
 	var response *response_type.PurgeQueueResponse
 	if handler.GCPClient != nil {
-
+		err := errors.New("unsupported operation")
+		processError(err, writer)
+		return
 	} else {
 		_, err := handler.SqsClient.PurgeQueueRequest(params).Send()
 		if err != nil {
@@ -357,6 +359,7 @@ func (handler *Handler) SendHandle(writer http.ResponseWriter, request *http.Req
 		req, err := handler.gcpPublish(topic, id, &pubsub.Message{
 			Data: body,
 		})
+		defer topic.Stop()
 		if err != nil {
 			logging.Log.Error("Error sending", err)
 			processError(err, writer)
@@ -438,7 +441,38 @@ func (handler *Handler) SendBatchHandle(writer http.ResponseWriter, request *htt
 	}
 	var response *response_type.SendMessageBatchResponse
 	if handler.GCPClient != nil {
-
+		pieces := strings.Split(*params.QueueUrl, "/")
+		id := pieces[len(pieces) - 1]
+		topic := handler.GCPClientToTopic(id, handler.GCPClient)
+		defer topic.Stop()
+		success := make([]response_type.SendMessageBatchResultEntry, 0)
+		for _, entry := range params.Entries {
+			body := []byte(*entry.MessageBody)
+			req, err := handler.gcpPublish(topic, id, &pubsub.Message{
+				Data: body,
+			})
+			if err != nil {
+				logging.Log.Error("Error sending", err)
+				processError(err, writer)
+				return
+			}
+			resp, err := req.Get(*handler.Context)
+			md5OfBody := fmt.Sprintf("%x", md5.Sum(body))
+			if err != nil {
+				logging.Log.Error("Error sending", err)
+			} else {
+				success = append(success, response_type.SendMessageBatchResultEntry{
+					MD5OfMessageBody: &md5OfBody,
+					MessageId: &resp,
+					Id: entry.Id,
+				})
+			}
+		}
+		response = &response_type.SendMessageBatchResponse{
+			SendMessageBatchResult: response_type.SendMessageBatchResult{
+				Entries: success,
+			},
+		}
 	} else {
 		logging.Log.Debugf("Sending %v", params)
 		resp, err := handler.SqsClient.SendMessageBatchRequest(params).Send()
@@ -778,7 +812,19 @@ func (handler *Handler) DeleteMessageBatchHandle(writer http.ResponseWriter, req
 	}
 	var response *response_type.DeleteMessageBatchResponse
 	if handler.GCPClient != nil {
-
+		response = &response_type.DeleteMessageBatchResponse{}
+		success := make([]response_type.DeleteMessageBatchResultEntry, 0)
+		for _, entry := range params.Entries {
+			if handler.ToAck[*entry.ReceiptHandle] != nil {
+				handler.ToAck[*entry.ReceiptHandle] <- true
+				success = append(success, response_type.DeleteMessageBatchResultEntry{
+					Id: entry.Id,
+				})
+			}
+		}
+		response.DeleteMessageBatchResult = response_type.DeleteMessageBatchResult{
+			DeleteMessageBatchResultEntry: success,
+		}
 	} else {
 		resp, err := handler.SqsClient.DeleteMessageBatchRequest(params).Send()
 		if err != nil {
