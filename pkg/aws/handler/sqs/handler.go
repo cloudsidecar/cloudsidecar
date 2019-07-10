@@ -7,14 +7,19 @@ import (
 	"cloudsidecar/pkg/logging"
 	"cloudsidecar/pkg/response_type"
 	"context"
+	"crypto/md5"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
+	kmsproto "google.golang.org/genproto/googleapis/cloud/kms/v1"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 type Handler struct {
@@ -25,6 +30,7 @@ type Handler struct {
 	GCPKMSClient *kms.KeyManagementClient
 	Context *context.Context
 	Config *viper.Viper
+	ToAck map[string]chan bool
 }
 
 type HandlerInterface interface {
@@ -93,7 +99,9 @@ func (handler *Handler) SetConfig(config *viper.Viper) {
 
 
 func New() *Handler {
-	return &Handler{}
+	return &Handler{
+		ToAck: make(map[string]chan bool),
+	}
 }
 
 func (handler *Handler) Register(mux *mux.Router) {
@@ -166,13 +174,14 @@ func processError(err error, writer http.ResponseWriter) {
 func (handler *Handler) ListHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.ListHandleParseInput(request)
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(fmt.Sprint(err)))
+		processError(err, writer)
 		return
 	}
 	var response *response_type.ListQueuesResponse
 	if handler.GCPClient != nil {
-
+		err := errors.New("unsupported operation")
+		processError(err, writer)
+		return
 	} else {
 		resp, err := handler.SqsClient.ListQueuesRequest(params).Send()
 		if err != nil {
@@ -203,13 +212,37 @@ func (handler *Handler) ListHandleParseInput(r *http.Request) (*sqs.ListQueuesIn
 func (handler *Handler) CreateHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.CreateHandleParseInput(request)
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(fmt.Sprint(err)))
+		processError(err, writer)
 		return
 	}
 	var response *response_type.CreateQueueResponse
 	if handler.GCPClient != nil {
-
+		id := strings.ReplaceAll(*params.QueueName, "-", "")
+		_, err := handler.GCPClient.CreateTopic(*handler.Context, *params.QueueName)
+		if err != nil {
+			logging.Log.Error("Error creating", err)
+			processError(err, writer)
+			return
+		}
+		topic := handler.GCPClient.Topic(id)
+		ackDuration, _ := time.ParseDuration("1m")
+		retentionDuration, _ := time.ParseDuration("1d")
+		_, err = handler.GCPClient.CreateSubscription(*handler.Context, id, pubsub.SubscriptionConfig{
+			Topic: topic,
+			AckDeadline: ackDuration,
+			RetentionDuration: retentionDuration,
+		})
+		if err != nil {
+			logging.Log.Errorf("Error creating subscription %s", err)
+			processError(err, writer)
+			return
+		}
+		response = &response_type.CreateQueueResponse{
+			CreateQueueResult: response_type.QueueUrls{
+				QueueUrl: []string{fmt.Sprintf("https://sqs/%s", id)},
+			},
+			XmlNS: response_type.XmlNs,
+		}
 	} else {
 		resp, err := handler.SqsClient.CreateQueueRequest(params).Send()
 		if err != nil {
@@ -251,8 +284,7 @@ func (handler *Handler) CreateHandleParseInput(r *http.Request) (*sqs.CreateQueu
 func (handler *Handler) PurgeHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.PurgeHandleParseInput(request)
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(fmt.Sprint(err)))
+		processError(err, writer)
 		return
 	}
 	var response *response_type.PurgeQueueResponse
@@ -283,8 +315,7 @@ func (handler *Handler) PurgeHandleParseInput(r *http.Request) (*sqs.PurgeQueueI
 func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.DeleteHandleParseInput(request)
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(fmt.Sprint(err)))
+		processError(err, writer)
 		return
 	}
 	var response *response_type.DeleteQueueResponse
@@ -314,13 +345,37 @@ func (handler *Handler) DeleteHandleParseInput(r *http.Request) (*sqs.DeleteQueu
 func (handler *Handler) SendHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.SendHandleParseInput(request)
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(fmt.Sprint(err)))
+		processError(err, writer)
 		return
 	}
 	var response *response_type.SendMessageResponse
 	if handler.GCPClient != nil {
-
+		pieces := strings.Split(*params.QueueUrl, "/")
+		id := pieces[len(pieces) - 1]
+		topic := handler.GCPClientToTopic(id, handler.GCPClient)
+		body := []byte(*params.MessageBody)
+		req, err := handler.gcpPublish(topic, id, &pubsub.Message{
+			Data: body,
+		})
+		if err != nil {
+			logging.Log.Error("Error sending", err)
+			processError(err, writer)
+			return
+		}
+		resp, err := req.Get(*handler.Context)
+		md5OfBody := fmt.Sprintf("%x", md5.Sum(body))
+		if err != nil {
+			logging.Log.Error("Error sending", err)
+			processError(err, writer)
+			return
+		}
+		response = &response_type.SendMessageResponse{
+			XmlNS: response_type.XmlNs,
+			SendMessageResult: response_type.SendMessageResult{
+				MD5OfMessageBody: &md5OfBody,
+				MessageId: &resp,
+			},
+		}
 	} else {
 		resp, err := handler.SqsClient.SendMessageRequest(params).Send()
 		if err != nil {
@@ -378,8 +433,7 @@ func (handler *Handler) SendHandleParseInput(r *http.Request) (*sqs.SendMessageI
 func (handler *Handler) SendBatchHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.SendBatchHandleParseInput(request)
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(fmt.Sprint(err)))
+		processError(err, writer)
 		return
 	}
 	var response *response_type.SendMessageBatchResponse
@@ -472,16 +526,133 @@ func (handler *Handler) SendBatchHandleParseInput(r *http.Request) (*sqs.SendMes
 	return input, nil
 }
 
+func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionInfo pubsub.SubscriptionConfig, receivedAll chan []response_type.SqsMessage, subscription pubsub.Subscription, errChan chan error) {
+	cancelContext, cancelFunc1 := context.WithCancel(*handler.Context)
+	// this is to wait for acks
+	timeoutConfig := fmt.Sprintf("%ds", *params.VisibilityTimeout)
+	timeoutDuration, _ := time.ParseDuration(timeoutConfig)
+	// this is the timeout to read up to N entries.  return to user first of getting N entries or timeout
+	readTimeoutConfig := handler.Config.GetString("gcp_destination_config.pub_sub_config.read_timeout")
+	readTimeoutDuration, _ := time.ParseDuration(readTimeoutConfig)
+	logging.Log.Debugf("Waiting for %v", timeoutDuration)
+	cctx, cancelFunc := context.WithTimeout(cancelContext, timeoutDuration)
+	pieces := strings.Split(*params.QueueUrl, "/")
+	id := pieces[len(pieces) - 1]
+	var lock sync.Mutex
+	logging.Log.Debugf("Waiting for 1 on %s %v", id, subscriptionInfo)
+	topicPieces := strings.Split(subscriptionInfo.Topic.ID(), "/")
+	topic := topicPieces[len(topicPieces) - 1]
+	datas := make([]response_type.SqsMessage, 0)
+	receivedCount := 0
+	ackedCount := 0
+	continueReading := true
+	go func() {
+		select {
+		case <- time.After(readTimeoutDuration):
+			lock.Lock()
+			continueReading = false
+			lock.Unlock()
+			receivedAll <- datas
+			logging.Log.Debugf("receive window timeout")
+		}
+	}()
+	waitTimeoutChan := time.After(timeoutDuration)
+	go func() {
+		err := subscription.Receive(cctx, func(context context.Context, message *pubsub.Message) {
+			logging.Log.Debugf("Received %s", message.Data)
+			data, err := handler.tryToDecrypt(topic, message.Data)
+			if err != nil {
+				errChan <- err
+				cancelFunc()
+				cancelFunc1()
+				return
+			}
+			dataString := string(data)
+			md5OfBody := fmt.Sprintf("%x", md5.Sum(data))
+			logging.Log.Debugf("Need to ack %s", message.ID)
+			handler.ToAck[message.ID] = make(chan bool)
+			lock.Lock()
+			if !continueReading {
+				return
+			}
+			datas = append(datas, response_type.SqsMessage{
+				MessageId:     &message.ID,
+				ReceiptHandle: &message.ID,
+				MD5OfBody:     &md5OfBody,
+				Body:          &dataString,
+			})
+			receivedCount++
+			if receivedCount >= subscription.ReceiveSettings.MaxOutstandingMessages {
+				logging.Log.Debugf("Received all")
+				receivedAll <- datas
+			}
+			lock.Unlock()
+			select {
+			case isAck := <- handler.ToAck[message.ID]:
+				delete(handler.ToAck, message.ID)
+				logging.Log.Debugf("Got ack for %s %v", message.ID, isAck)
+				if isAck {
+					message.Ack()
+				} else {
+					message.Nack()
+				}
+				ackedCount ++
+				if ackedCount >= receivedCount {
+					cancelFunc1()
+					cancelFunc()
+					logging.Log.Debugf("Done waiting for acks")
+					return
+				}
+			case <- waitTimeoutChan:
+				delete(handler.ToAck, message.ID)
+				logging.Log.Debugf("Timeout while waiting for acks")
+				message.Nack()
+				return
+			}
+		})
+		logging.Log.Debugf("Exited loop")
+		if err != nil {
+			errChan <- err
+		}
+	}()
+}
+
 func (handler *Handler) ReceiveHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.ReceiveHandleParseInput(request)
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(fmt.Sprint(err)))
+		processError(err, writer)
 		return
 	}
 	var response *response_type.ReceiveMessageResponse
 	if handler.GCPClient != nil {
-
+		pieces := strings.Split(*params.QueueUrl, "/")
+		id := pieces[len(pieces) - 1]
+		subscription := handler.GCPClient.Subscription(id)
+		subscriptionInfo, err := subscription.Config(*handler.Context)
+		if err != nil {
+			writer.WriteHeader(400)
+			writer.Write([]byte(fmt.Sprint(err)))
+			return
+		}
+		maxCount := params.MaxNumberOfMessages
+		subscription.ReceiveSettings.MaxOutstandingMessages = int(*maxCount)
+		subscription.ReceiveSettings.NumGoroutines = 1
+		subscription.ReceiveSettings.Synchronous = true
+		receivedAll := make(chan []response_type.SqsMessage)
+		errChan := make(chan error)
+		handler.gcpReceive(*params, subscriptionInfo, receivedAll, *subscription, errChan)
+		select {
+		case datas := <-receivedAll:
+			response = &response_type.ReceiveMessageResponse{
+				XmlNS: response_type.XmlNs,
+				ReceiveMessageResult: response_type.ReceiveMessageResult{
+					Message: datas,
+				},
+			}
+		case err = <-errChan:
+			processError(err, writer)
+			return
+		}
 	} else {
 		resp, err := handler.SqsClient.ReceiveMessageRequest(params).Send()
 		if err != nil {
@@ -528,11 +699,22 @@ func (handler *Handler) ReceiveHandleParseInput(r *http.Request) (*sqs.ReceiveMe
 	}
 	if maxMessages != "" {
 		maxNumber, _ := strconv.ParseInt(maxMessages, 10, 64)
+		if maxNumber < 1 {
+			return nil, errors.New("max messages cannot be less than 1")
+		} else if maxNumber > 10 {
+			return nil, errors.New("max messages cannot be greater than 10")
+		}
+		input.MaxNumberOfMessages = &maxNumber
+	} else {
+		maxNumber := int64(10)
 		input.MaxNumberOfMessages = &maxNumber
 	}
 	if visibility != "" {
 		visibilityNumber, _ := strconv.ParseInt(visibility, 10, 64)
 		input.VisibilityTimeout = &visibilityNumber
+	} else {
+		defaultTimeout := int64(30)
+		input.VisibilityTimeout = &defaultTimeout
 	}
 	attributes := make([]sqs.QueueAttributeName, 0)
 	messageAttributes := make([]string, 0)
@@ -556,13 +738,15 @@ func (handler *Handler) ReceiveHandleParseInput(r *http.Request) (*sqs.ReceiveMe
 func (handler *Handler) DeleteMessageHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.DeleteMessageHandleParseInput(request)
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(fmt.Sprint(err)))
+		processError(err, writer)
 		return
 	}
 	var response *response_type.DeleteMessageResponse
 	if handler.GCPClient != nil {
-
+		if handler.ToAck[*params.ReceiptHandle] != nil {
+			handler.ToAck[*params.ReceiptHandle] <- true
+		}
+		response = &response_type.DeleteMessageResponse{}
 	} else {
 		_, err := handler.SqsClient.DeleteMessageRequest(params).Send()
 		if err != nil {
@@ -589,8 +773,7 @@ func (handler *Handler) DeleteMessageHandleParseInput(r *http.Request) (*sqs.Del
 func (handler *Handler) DeleteMessageBatchHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.DeleteMessageBatchHandleParseInput(request)
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(fmt.Sprint(err)))
+		processError(err, writer)
 		return
 	}
 	var response *response_type.DeleteMessageBatchResponse
@@ -642,4 +825,42 @@ func (handler *Handler) DeleteMessageBatchHandleParseInput(r *http.Request) (*sq
 		input.Entries = messageAttributes
 	}
 	return input, nil
+}
+
+func (handler *Handler) gcpPublish(topic kinesis.GCPTopic, topicName string, message *pubsub.Message) (kinesis.GCPPublishResult, error) {
+	keyMap := handler.Config.GetStringMapString("gcp_destination_config.pub_sub_config.topic_kms_map")
+	logging.Log.Debugf("Found keymap looking for %s %s", keyMap, topicName)
+	kvmKey := keyMap[topicName]
+	if kvmKey != "" {
+		req := &kmsproto.EncryptRequest{
+			Name: kvmKey,
+			Plaintext: message.Data,
+		}
+		resp, err := handler.GCPKMSClient.Encrypt(*handler.Context, req)
+		if err != nil {
+			return nil, err
+		} else {
+			message.Data = resp.Ciphertext
+		}
+	}
+	return handler.GCPResultWrapper(topic.Publish(*handler.Context, message)), nil
+}
+
+func (handler *Handler) tryToDecrypt(topicName string, message []byte) ([]byte, error) {
+	keyMap := handler.Config.GetStringMapString("gcp_destination_config.pub_sub_config.topic_kms_map")
+	logging.Log.Debugf("Found keymap looking for %s %s", keyMap, topicName)
+	kvmKey := keyMap[topicName]
+	if kvmKey != "" {
+		req := &kmsproto.DecryptRequest{
+			Name: kvmKey,
+			Ciphertext: message,
+		}
+		resp, err := handler.GCPKMSClient.Decrypt(*handler.Context, req)
+		if err != nil {
+			return nil, err
+		} else {
+			return resp.Plaintext, nil
+		}
+	}
+	return message, nil
 }

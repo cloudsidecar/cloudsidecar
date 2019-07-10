@@ -188,6 +188,7 @@ func (handler *KinesisHandler) GetRecordsHandle(writer http.ResponseWriter, requ
 			defer lock.Unlock()
 			logging.Log.Debugf("Received %s", message.Data)
 			if readCount >= maxCount {
+				message.Nack()
 				logging.Log.Debugf("Skipping message over max")
 			} else {
 				record := kinesis.Record{

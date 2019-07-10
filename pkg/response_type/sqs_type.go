@@ -46,7 +46,7 @@ type DeleteQueueResponse struct {
 }
 
 type SendMessageResponse struct {
-	XMLName xml.Name `xml:"PurgeQueueResponse"`
+	XMLName xml.Name `xml:"SendMessageResponse"`
 	XmlNS string `xml:"xmlns,attr"`
 	SendMessageResult SendMessageResult `xml:"SendMessageResult"`
 }

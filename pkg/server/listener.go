@@ -211,6 +211,24 @@ func Main(cmd *cobra.Command, args []string) {
 				GCPResultWrapper: func(result *pubsub.PublishResult) kinesishandler.GCPPublishResult {
 					return result
 				},
+				ToAck: make(map[string]chan bool),
+			}
+			if awsConfig.DestinationGCPConfig != nil {
+				gcpClient, err := newGCPPubSub(
+					ctx,
+					awsConfig.DestinationGCPConfig.Project,
+					*awsConfig.DestinationGCPConfig.KeyFileLocation,
+				)
+				if err != nil {
+					panic(fmt.Sprintln("Error setting up gcp client", err))
+				}
+				gcpKmsClient, err := newGCPKmsClient(ctx, *awsConfig.DestinationGCPConfig.KeyFileLocation)
+				if err != nil {
+					panic(fmt.Sprintln("Error setting up gcp client", err))
+				}
+				handler.GCPClient = gcpClient
+				handler.GCPKMSClient = gcpKmsClient
+				handler.Context = &ctx
 			}
 			awsHandlers[key] = &handler
 			handler.Register(r)
