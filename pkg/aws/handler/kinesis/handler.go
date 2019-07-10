@@ -482,6 +482,7 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 		str, _ := base64.StdEncoding.DecodeString(payload.Data)
 		if handler.GCPClient != nil {
 			topic := handler.GCPClientToTopic(payload.StreamName, handler.GCPClient)
+			defer topic.Stop()
 			req, err := handler.gcpPublish(topic, payload.StreamName, &pubsub.Message{
 				Data: str,
 			})
@@ -529,6 +530,7 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 			var wg sync.WaitGroup
 			wg.Add(len(payload.Records))
 			topic := handler.GCPClientToTopic(payload.StreamName, handler.GCPClient)
+			defer topic.Stop()
 			for i, record := range payload.Records {
 				str, _ := base64.StdEncoding.DecodeString(record.Data)
 				req, err := handler.gcpPublish(topic, payload.StreamName, &pubsub.Message{
