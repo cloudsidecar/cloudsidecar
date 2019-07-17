@@ -65,7 +65,7 @@ func TestHandler_ListParseInput(t *testing.T) {
 	}
 	req = mux.SetURLVars(req, valueMap)
 	handler := New(nil)
-	result, _ := handler.ListParseInput(req)
+	result, _ := handler.Listv2ParseInput(req)
 	if *result.Bucket != "boops" {
 		t.Error("Bucket should be boops")
 	}
@@ -96,7 +96,7 @@ func TestHandler_ListHandle_NoBucket(t *testing.T) {
 	}
 	writerMock.EXPECT().WriteHeader(400)
 	writerMock.EXPECT().Write([]byte("no bucket present"))
-	handler.ListHandle(writerMock, request)
+	handler.ListHandlev2(writerMock, request)
 }
 
 func TestHandler_ListHandle_Success(t *testing.T) {
@@ -134,7 +134,7 @@ func TestHandler_ListHandle_Success(t *testing.T) {
 
 func listHandlerRecover(handler *Handler, w http.ResponseWriter, r *http.Request){
 	defer recoverFail()
-	handler.ListHandle(w, r)
+	handler.ListHandlev2(w, r)
 }
 
 func recoverFail() {

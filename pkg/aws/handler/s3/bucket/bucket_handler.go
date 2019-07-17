@@ -26,6 +26,8 @@ type Handler struct {
 }
 
 type Bucket interface {
+	ListHandlev2(writer http.ResponseWriter, request *http.Request)
+	Listv2ParseInput(r *http.Request) (*s3.ListObjectsInput, error)
 	ListHandle(writer http.ResponseWriter, request *http.Request)
 	ListParseInput(r *http.Request) (*s3.ListObjectsInput, error)
 	ACLHandle(writer http.ResponseWriter, request *http.Request)
@@ -43,11 +45,15 @@ func (wrapper *Handler) Register(mux *mux.Router) {
 	if keyFromUrl != nil && keyFromUrl == true{
 		mux.HandleFunc("/{creds}/{bucket}", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
 		mux.HandleFunc("/{creds}/{bucket}/", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
+		mux.HandleFunc("/{creds}/{bucket}", wrapper.ListHandlev2).Queries("list-type", "2").Methods("GET")
+		mux.HandleFunc("/{creds}/{bucket}/", wrapper.ListHandlev2).Queries("list-type", "2").Methods("GET")
 		mux.HandleFunc("/{creds}/{bucket}", wrapper.ListHandle).Methods("GET")
 		mux.HandleFunc("/{creds}/{bucket}/", wrapper.ListHandle).Methods("GET")
 	} else {
 		mux.HandleFunc("/{bucket}", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
 		mux.HandleFunc("/{bucket}/", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
+		mux.HandleFunc("/{bucket}", wrapper.ListHandlev2).Queries("list-type", "2").Methods("GET")
+		mux.HandleFunc("/{bucket}/", wrapper.ListHandlev2).Queries("list-type", "2").Methods("GET")
 		mux.HandleFunc("/{bucket}", wrapper.ListHandle).Methods("GET")
 		mux.HandleFunc("/{bucket}/", wrapper.ListHandle).Methods("GET")
 	}
@@ -62,7 +68,110 @@ func (wrapper *Handler) ListParseInput(request *http.Request) (*s3.ListObjectsIn
 	listRequest := &s3.ListObjectsInput{Bucket: &bucket}
 	delim := request.URL.Query().Get("delimiter")
 	listRequest.Delimiter = &delim
-	if encodingType := request.URL.Query().Get("encoding-response_type"); encodingType == "url" {
+	if encodingType := request.URL.Query().Get("encoding-type"); encodingType == "url" {
+		listRequest.EncodingType = s3.EncodingTypeUrl
+	}
+	if maxKeys := request.URL.Query().Get("max-keys"); maxKeys != "" {
+		maxKeyInt, _ := strconv.ParseInt(maxKeys, 10, 64)
+		listRequest.MaxKeys = &maxKeyInt
+	} else {
+		maxKeyInt := int64(1000)
+		listRequest.MaxKeys = &maxKeyInt
+	}
+	if marker := request.URL.Query().Get("marker"); marker != "" {
+		listRequest.Marker = &marker
+	}
+	prefix := request.URL.Query().Get("prefix")
+	listRequest.Prefix = &prefix
+	return listRequest, nil
+}
+
+func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Request) {
+	input, err := wrapper.ListParseInput(request)
+	if err != nil {
+		writer.WriteHeader(400)
+		writer.Write([]byte(fmt.Sprint(err)))
+		return
+	}
+	bucket := *input.Bucket
+	var response *response_type.AWSListBucketResponse
+	pageSize := 1000
+	if input.MaxKeys != nil {
+		pageSize = int(*input.MaxKeys)
+	}
+	if wrapper.GCPClient != nil {
+		client := wrapper.GCPRequestSetup(request)
+		bucket = wrapper.BucketRename(bucket)
+		bucketObject := wrapper.GCPClientToBucket(bucket, client)
+		it := bucketObject.Objects(*wrapper.Context, &storage.Query{
+			Delimiter: *input.Delimiter,
+			Prefix: *input.Prefix,
+			Versions: false,
+		})
+		response, err = converter.GCSListResponseToAWS(it, input, pageSize)
+		if err != nil {
+			logging.Log.Error("Error %s %s\n", request.RequestURI, err)
+			writer.WriteHeader(400)
+			writer.Write([]byte(fmt.Sprint(err)))
+			return
+		}
+	} else {
+		logging.LogUsingAWS()
+		req := wrapper.S3Client.ListObjectsRequest(input)
+		resp, respError := req.Send()
+		if respError != nil {
+			logging.Log.Error("Error %s %s\n", request.RequestURI, respError)
+			writer.WriteHeader(400)
+			writer.Write([]byte(fmt.Sprint(err)))
+		}
+		var contents= make([]*response_type.BucketContent, len(resp.Contents))
+		for i, content := range resp.Contents {
+			contents[i] = &response_type.BucketContent{
+				Key:          *content.Key,
+				LastModified: content.LastModified.Format("2006-01-02T15:04:05.000Z"),
+				ETag:         *content.ETag,
+				Size:         *content.Size,
+				StorageClass: string(content.StorageClass),
+			}
+		}
+		var prefixes= make([]*response_type.BucketCommonPrefix, len(resp.CommonPrefixes))
+		for i, prefix := range resp.CommonPrefixes {
+			prefixes[i] = &response_type.BucketCommonPrefix{
+				Prefix: *prefix.Prefix,
+			}
+		}
+		response = &response_type.AWSListBucketResponse{
+			XmlNS:                 "http://s3.amazonaws.com/doc/2006-03-01/",
+			Name:                  resp.Name,
+			Prefix:                resp.Prefix,
+			Delimiter:             nil,
+			Marker:                resp.Marker,
+			KeyCount:              int64(len(contents)),
+			MaxKeys:               resp.MaxKeys,
+			IsTruncated:           resp.IsTruncated,
+			Contents:              contents,
+			CommonPrefixes:        prefixes,
+			NextContinuationToken: resp.NextMarker,
+		}
+		if resp.Delimiter != nil && *resp.Delimiter != "" {
+			response.Delimiter = resp.Delimiter
+		}
+	}
+	output, _ := xml.Marshal(response)
+	writer.Write([]byte(s3_handler.XmlHeader))
+	writer.Write([]byte(string(output)))
+}
+
+func (wrapper *Handler) Listv2ParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
+	vars := mux.Vars(request)
+	bucket := vars["bucket"]
+	if bucket == "" {
+		return nil, errors.New("no bucket present")
+	}
+	listRequest := &s3.ListObjectsInput{Bucket: &bucket}
+	delim := request.URL.Query().Get("delimiter")
+	listRequest.Delimiter = &delim
+	if encodingType := request.URL.Query().Get("encoding-type"); encodingType == "url" {
 		listRequest.EncodingType = s3.EncodingTypeUrl
 	}
 	if maxKeys := request.URL.Query().Get("max-keys"); maxKeys != "" {
@@ -83,8 +192,8 @@ func (wrapper *Handler) ListParseInput(request *http.Request) (*s3.ListObjectsIn
 	return listRequest, nil
 }
 
-func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Request) {
-	input, err := wrapper.ListParseInput(request)
+func (wrapper *Handler) ListHandlev2(writer http.ResponseWriter, request *http.Request) {
+	input, err := wrapper.Listv2ParseInput(request)
 	if err != nil {
 		writer.WriteHeader(400)
 		writer.Write([]byte(fmt.Sprint(err)))
@@ -92,6 +201,10 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 	}
 	bucket := *input.Bucket
 	var response *response_type.AWSListBucketResponse
+	pageSize := 1000
+	if input.MaxKeys != nil {
+		pageSize = int(*input.MaxKeys)
+	}
 	if wrapper.GCPClient != nil {
 		client := wrapper.GCPRequestSetup(request)
 		bucket = wrapper.BucketRename(bucket)
@@ -101,7 +214,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 			Prefix: *input.Prefix,
 			Versions: false,
 		})
-		response, err = converter.GCSListResponseToAWS(it, input)
+		response, err = converter.GCSListResponseToAWSv2(it, input, pageSize)
 		if err != nil {
 			logging.Log.Error("Error %s %s\n", request.RequestURI, err)
 			writer.WriteHeader(400)
