@@ -35,12 +35,14 @@ func TestHandler_ACLHandle(t *testing.T) {
 	clientMock := s3_handler.NewMockGCPClient(ctrl)
 	ctx := context.Background()
 	s3Handler := &s3_handler.Handler{
-		GCPClient: clientMock,
+		GCPClient: func() (s3_handler.GCPClient, error) {
+			return clientMock, nil
+		},
+		GCPClientPool: make(map[string][]s3_handler.GCPClient),
 		GCPClientToBucket: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
 			return bucketMock
 		},
 		Context: &ctx,
-
 	}
 	handler := New(s3Handler)
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
@@ -65,7 +67,7 @@ func TestHandler_ListParseInput(t *testing.T) {
 	}
 	req = mux.SetURLVars(req, valueMap)
 	handler := New(nil)
-	result, _ := handler.ListParseInput(req)
+	result, _ := handler.Listv2ParseInput(req)
 	if *result.Bucket != "boops" {
 		t.Error("Bucket should be boops")
 	}
@@ -96,7 +98,7 @@ func TestHandler_ListHandle_NoBucket(t *testing.T) {
 	}
 	writerMock.EXPECT().WriteHeader(400)
 	writerMock.EXPECT().Write([]byte("no bucket present"))
-	handler.ListHandle(writerMock, request)
+	handler.ListHandlev2(writerMock, request)
 }
 
 func TestHandler_ListHandle_Success(t *testing.T) {
@@ -107,7 +109,10 @@ func TestHandler_ListHandle_Success(t *testing.T) {
 	clientMock := s3_handler.NewMockGCPClient(ctrl)
 	ctx := context.Background()
 	s3Handler := &s3_handler.Handler{
-		GCPClient: clientMock,
+		GCPClient: func() (s3_handler.GCPClient, error) {
+			return clientMock, nil
+		},
+		GCPClientPool: make(map[string][]s3_handler.GCPClient),
 		GCPClientToBucket: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
 			return bucketMock
 		},
@@ -134,7 +139,7 @@ func TestHandler_ListHandle_Success(t *testing.T) {
 
 func listHandlerRecover(handler *Handler, w http.ResponseWriter, r *http.Request){
 	defer recoverFail()
-	handler.ListHandle(w, r)
+	handler.ListHandlev2(w, r)
 }
 
 func recoverFail() {

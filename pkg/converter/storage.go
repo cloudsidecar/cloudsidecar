@@ -31,28 +31,11 @@ func gcpPermissionToAWS(role storage.ACLRole) string {
 
 func GCPUpload(input *s3manager.UploadInput, writer Writer) (int64, error) {
 	reader := input.Body
-	buffer := make([]byte, 4096)
-	var bytes int64
-	for {
-		n, err := reader.Read(buffer)
-		if n > 0 {
-			bytes += int64(n)
-			logging.Log.Debug("Read bytes ", n)
-			_, writeErr := writer.Write(buffer[:n])
-			if writeErr != nil {
-				logging.Log.Error("Write error ", writeErr)
-				return bytes, writeErr
-			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			logging.Log.Error("ERROR ", err)
-			return bytes, err
-		}
+	bytes, writeErr := io.Copy(writer, reader)
+	if writeErr != nil {
+		logging.Log.Error("Write error ", writeErr)
 	}
-	return bytes, nil
+	return bytes, writeErr
 }
 
 func GCSListResponseObjectsToAWS(contents []*response_type.BucketContent, listRequest *s3.ListObjectsInput, nextToken string, contentI int, prefixI int, prefixes []*response_type.BucketCommonPrefix) *response_type.AWSListBucketResponse{
@@ -95,7 +78,63 @@ func GCSItemToPrefix(item *storage.ObjectAttrs) *response_type.BucketCommonPrefi
 	}
 }
 
-func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput) (*response_type.AWSListBucketResponse, error) {
+// Old version of aws listing does not paginate nicely.  It uses the last item of the prior list to
+// do an offset.  So here we will just paginate through till we find that item.
+func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput, pageSize int) (*response_type.AWSListBucketResponse, error) {
+	contentI := 0
+	prefixI := 0
+	var marker string
+	if listRequest.Marker != nil && *listRequest.Marker != "" {
+		marker = *listRequest.Marker
+	}
+	var contents = make([]*response_type.BucketContent, pageSize)
+	var prefixes = make([]*response_type.BucketCommonPrefix, pageSize)
+	nextToken := ""
+	var err error
+	lastItem := ""
+	for contentI + prefixI < pageSize {
+		var pageResponse []*storage.ObjectAttrs
+		nextToken, err = iterator.NewPager(input, pageSize, nextToken).NextPage(&pageResponse)
+		if err != nil{
+			logging.Log.Error("Some error paginating", err)
+			return nil, err
+		}
+		for _, item := range pageResponse {
+			if contentI + prefixI >= pageSize {
+				break
+			}
+			if marker != "" {
+				if item.Name == marker || item.Prefix == marker {
+					marker = ""
+				}
+			} else {
+				if strings.HasSuffix(item.Name, "/") {
+
+				} else if item.Name != "" {
+					contents[contentI] = GCSItemToContent(item)
+					lastItem = item.Name
+					contentI++
+				} else {
+					prefixes[prefixI] = GCSItemToPrefix(item)
+					lastItem = item.Prefix
+					prefixI++
+				}
+			}
+		}
+		if len(pageResponse) == 0 || nextToken == "" {
+			break
+		}
+	}
+	if nextToken != "" {
+		nextToken = lastItem
+	}
+	contents = contents[:contentI]
+	prefixes = prefixes[:prefixI]
+	s3Resp := GCSListResponseObjectsToAWS(contents, listRequest, nextToken, contentI, prefixI, prefixes)
+	return s3Resp, nil
+}
+
+func GCSListResponseToAWSv2(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput, pageSize int) (*response_type.AWSListBucketResponse, error) {
 	contentI := 0
 	prefixI := 0
 	var pageResponse []*storage.ObjectAttrs
@@ -103,7 +142,7 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	if listRequest.Marker != nil && *listRequest.Marker != "" {
 		marker = *listRequest.Marker
 	}
-	nextToken, err := iterator.NewPager(input, 1000, marker).NextPage(&pageResponse)
+	nextToken, err := iterator.NewPager(input, pageSize, marker).NextPage(&pageResponse)
 	if err != nil{
 		return nil, err
 	}

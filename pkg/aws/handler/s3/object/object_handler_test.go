@@ -77,7 +77,10 @@ func todo_TestHandler_GetHandle(t *testing.T) {
 	writerMock := mock.NewMockResponseWriter(ctrl)
 	ctx := context.Background()
 	s3Handler := &s3_handler.Handler{
-		GCPClient: clientMock,
+		GCPClient: func() (s3_handler.GCPClient, error) {
+			return clientMock, nil
+		},
+		GCPClientPool: make(map[string][]s3_handler.GCPClient),
 		GCPClientToBucket: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
 			return bucketMock
 		},
@@ -130,7 +133,10 @@ func TestHandler_HeadHandle(t *testing.T) {
 	writerMock := mock.NewMockResponseWriter(ctrl)
 	ctx := context.Background()
 	s3Handler := &s3_handler.Handler{
-		GCPClient: clientMock,
+		GCPClient: func() (s3_handler.GCPClient, error) {
+			return clientMock, nil
+		},
+		GCPClientPool: make(map[string][]s3_handler.GCPClient),
 		GCPClientToBucket: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
 			return bucketMock
 		},
