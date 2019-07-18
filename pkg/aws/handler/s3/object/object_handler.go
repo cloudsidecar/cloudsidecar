@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/mux"
 	"google.golang.org/api/iterator"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	s3_handler "cloudsidecar/pkg/aws/handler/s3"
@@ -389,22 +390,25 @@ func (handler *Handler) GetParseInput(r *http.Request) (*s3.GetObjectInput, erro
 }
 
 func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Request) {
+	i := rand.Int()
+	logging.Log.Debug("A", i)
 	input, _ := handler.GetParseInput(request)
 	if header := request.Header.Get("Range"); header != "" {
 		input.Range = &header
 	}
 	if handler.GCPClient != nil {
+		logging.Log.Debug("B", i)
 		client := handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*input.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		objHandle := handler.GCPBucketToObject(*input.Key, bucketHandle)
 		attrs, err := objHandle.Attrs(*handler.Context)
+		logging.Log.Debug("C", i)
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
-		converter.GCSAttrToHeaders(attrs, writer)
 		var reader *storage.Reader
 		var readerError error
 		if input.Range != nil {
@@ -415,6 +419,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 			if len(byteSplit) > 1 {
 				endByte, _ := strconv.ParseInt(byteSplit[1], 10, 64)
 				length = endByte + 1 - startByte
+				attrs.Size = length
 			}
 			reader, readerError = objHandle.NewRangeReader(*handler.Context, startByte, length)
 		} else {
@@ -425,12 +430,18 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 			logging.Log.Error("Error %s %s", request.RequestURI, readerError)
 			return
 		}
+		converter.GCSAttrToHeaders(attrs, writer)
 		defer reader.Close()
 		buffer := make([]byte, 4096)
+		logging.Log.Debug("D", i)
 		for {
 			n, err := reader.Read(buffer)
+			logging.Log.Debug("E", i)
 			if n > 0 {
-				writer.Write(buffer[:n])
+				if _, writeErr := writer.Write(buffer[:n]); writeErr != nil {
+					logging.Log.Error("Some error writing", writeErr)
+					return
+				}
 			}
 			if err == io.EOF {
 				break

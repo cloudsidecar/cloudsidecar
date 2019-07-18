@@ -28,42 +28,80 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/api/option"
+	googleHttp "google.golang.org/api/transport/http"
+	"net"
 	"net/http"
 	"plugin"
 	"reflect"
 	"sync"
+	"time"
 )
 
 type Handler interface {
 	handleGet(writer http.ResponseWriter, request *http.Request)
 }
 
+func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.Client {
+	roundTrip := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          -1,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConnsPerHost: -1,
+		MaxConnsPerHost: -1,
+	}
+	userAgent := "gcloud-golang-storage/20151204"
+	o := []option.ClientOption{
+		option.WithScopes(storage.ScopeFullControl),
+		option.WithUserAgent(userAgent),
+	}
+	opts = append(o, opts...)
+	googleClient, _ := googleHttp.NewTransport(ctx, roundTrip, opts...)
+	logging.Log.Debug("", roundTrip)
+	return &http.Client{
+		Transport: googleClient,
+	}
+}
+
 func newGCPStorage(ctx context.Context, keyFileLocation string) (*storage.Client, error) {
-	return storage.NewClient(ctx, option.WithCredentialsFile(keyFileLocation))
+	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
+	return storage.NewClient(ctx, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
 }
 
 func newGCPStorageNoCreds(ctx context.Context) (*storage.Client, error) {
-	return storage.NewClient(ctx)
+	client := httpClientForGCP(ctx)
+	return storage.NewClient(ctx, option.WithHTTPClient(client))
 }
 
 func newGCPStorageRawKey(ctx context.Context, rawKey string) (*storage.Client, error) {
-	return storage.NewClient(ctx, option.WithCredentialsJSON([]byte(rawKey)))
+	client := httpClientForGCP(ctx, option.WithCredentialsJSON([]byte(rawKey)))
+	return storage.NewClient(ctx, option.WithCredentialsJSON([]byte(rawKey)), option.WithHTTPClient(client))
 }
 
 func newGCPPubSub(ctx context.Context, project string, keyFileLocation string) (*pubsub.Client, error) {
-	return pubsub.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
+	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
+	return pubsub.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
 }
 
 func newGCPKmsClient(ctx context.Context, keyFileLocation string) (*kms.KeyManagementClient, error) {
-	return kms.NewKeyManagementClient(ctx, option.WithCredentialsFile(keyFileLocation))
+	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
+	return kms.NewKeyManagementClient(ctx, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
 }
 
 func newGCPBigTable(ctx context.Context, project string, instance string, keyFileLocation string) (*bigtable.Client, error) {
-	return bigtable.NewClient(ctx, project, instance, option.WithCredentialsFile(keyFileLocation))
+	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
+	return bigtable.NewClient(ctx, project, instance, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
 }
 
 func newGCPDatastore(ctx context.Context, project string, keyFileLocation string) (*datastore.Client, error) {
-	return datastore.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
+	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
+	return datastore.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
