@@ -63,7 +63,6 @@ func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.C
 	}
 	opts = append(o, opts...)
 	googleClient, _ := googleHttp.NewTransport(ctx, roundTrip, opts...)
-	logging.Log.Debug("", roundTrip)
 	return &http.Client{
 		Transport: googleClient,
 	}

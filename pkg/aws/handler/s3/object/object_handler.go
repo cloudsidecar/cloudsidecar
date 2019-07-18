@@ -2,6 +2,10 @@ package object
 
 import (
 	"cloud.google.com/go/storage"
+	s3_handler "cloudsidecar/pkg/aws/handler/s3"
+	"cloudsidecar/pkg/converter"
+	"cloudsidecar/pkg/logging"
+	"cloudsidecar/pkg/response_type"
 	"crypto/md5"
 	"encoding/xml"
 	"fmt"
@@ -12,13 +16,8 @@ import (
 	"github.com/gorilla/mux"
 	"google.golang.org/api/iterator"
 	"io"
-	"math/rand"
 	"net/http"
 	"os"
-	s3_handler "cloudsidecar/pkg/aws/handler/s3"
-	"cloudsidecar/pkg/converter"
-	"cloudsidecar/pkg/logging"
-	"cloudsidecar/pkg/response_type"
 	"sort"
 	"strconv"
 	"strings"
@@ -390,20 +389,16 @@ func (handler *Handler) GetParseInput(r *http.Request) (*s3.GetObjectInput, erro
 }
 
 func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Request) {
-	i := rand.Int()
-	logging.Log.Debug("A", i)
 	input, _ := handler.GetParseInput(request)
 	if header := request.Header.Get("Range"); header != "" {
 		input.Range = &header
 	}
 	if handler.GCPClient != nil {
-		logging.Log.Debug("B", i)
 		client := handler.GCPRequestSetup(request)
 		bucket := handler.BucketRename(*input.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		objHandle := handler.GCPBucketToObject(*input.Key, bucketHandle)
 		attrs, err := objHandle.Attrs(*handler.Context)
-		logging.Log.Debug("C", i)
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
@@ -433,10 +428,8 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 		converter.GCSAttrToHeaders(attrs, writer)
 		defer reader.Close()
 		buffer := make([]byte, 4096)
-		logging.Log.Debug("D", i)
 		for {
 			n, err := reader.Read(buffer)
-			logging.Log.Debug("E", i)
 			if n > 0 {
 				if _, writeErr := writer.Write(buffer[:n]); writeErr != nil {
 					logging.Log.Error("Some error writing", writeErr)
