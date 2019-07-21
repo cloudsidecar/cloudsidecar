@@ -176,7 +176,8 @@ func TestGCPUpload(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	letterRunes := []rune("abc")
-	fakeBodyRune := make([]rune, 4100)
+	packetSize := 32 * 1024
+	fakeBodyRune := make([]rune, packetSize)
 	for i := range fakeBodyRune {
 		fakeBodyRune[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
@@ -186,8 +187,8 @@ func TestGCPUpload(t *testing.T) {
 		Body: strings.NewReader(fakeBody),
 	}
 	writerMock2 := mock.NewMockWriter(ctrl)
-	firstCall := writerMock2.EXPECT().Write(fakeBodyBytes[:4096]).Return(4096, nil)
-	writerMock2.EXPECT().Write(fakeBodyBytes[4096:]).Return(4, nil).After(firstCall)
+	writerMock2.EXPECT().Write(fakeBodyBytes[:packetSize]).Return(packetSize, nil)
+	//writerMock2.EXPECT().Write(fakeBodyBytes[packetSize:]).Return(4, nil).After(firstCall)
 	output, err = GCPUpload(uploadInput, writerMock2)
 	assert.Nil(t, err)
 	assert.Equal(t, output, int64(len(fakeBodyBytes)))
