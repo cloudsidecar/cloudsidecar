@@ -1,3 +1,5 @@
+// Handle s3 object style requests
+
 package object
 
 import (
@@ -31,6 +33,7 @@ type Handler struct {
 	fileMutex sync.Mutex
 }
 
+// Interface for object functions
 type Bucket interface {
 	HeadHandle(writer http.ResponseWriter, request *http.Request)
 	HeadParseInput(r *http.Request) (*s3.HeadObjectInput, error)
