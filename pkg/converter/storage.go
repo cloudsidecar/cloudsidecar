@@ -31,28 +31,11 @@ func gcpPermissionToAWS(role storage.ACLRole) string {
 
 func GCPUpload(input *s3manager.UploadInput, writer Writer) (int64, error) {
 	reader := input.Body
-	buffer := make([]byte, 4096)
-	var bytes int64
-	for {
-		n, err := reader.Read(buffer)
-		if n > 0 {
-			bytes += int64(n)
-			logging.Log.Debug("Read bytes ", n)
-			_, writeErr := writer.Write(buffer[:n])
-			if writeErr != nil {
-				logging.Log.Error("Write error ", writeErr)
-				return bytes, writeErr
-			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			logging.Log.Error("ERROR ", err)
-			return bytes, err
-		}
+	bytes, writeErr := io.Copy(writer, reader)
+	if writeErr != nil {
+		logging.Log.Error("Write error ", writeErr)
 	}
-	return bytes, nil
+	return bytes, writeErr
 }
 
 func GCSListResponseObjectsToAWS(contents []*response_type.BucketContent, listRequest *s3.ListObjectsInput, nextToken string, contentI int, prefixI int, prefixes []*response_type.BucketCommonPrefix) *response_type.AWSListBucketResponse{

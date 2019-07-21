@@ -40,7 +40,6 @@ import (
 type Handler interface {
 	handleGet(writer http.ResponseWriter, request *http.Request)
 }
-
 func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.Client {
 	roundTrip := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -49,12 +48,12 @@ func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.C
 			KeepAlive: 30 * time.Second,
 			DualStack: true,
 		}).DialContext,
-		MaxIdleConns:          -1,
-		IdleConnTimeout:       90 * time.Second,
+		MaxIdleConns:          1,
+		IdleConnTimeout:       5 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		MaxIdleConnsPerHost: -1,
-		MaxConnsPerHost: -1,
+		MaxIdleConnsPerHost: 1,
+		MaxConnsPerHost: 1,
 	}
 	userAgent := "gcloud-golang-storage/20151204"
 	o := []option.ClientOption{
@@ -69,13 +68,11 @@ func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.C
 }
 
 func newGCPStorage(ctx context.Context, keyFileLocation string) (*storage.Client, error) {
-	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
-	return storage.NewClient(ctx, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
+	return storage.NewClient(ctx, option.WithCredentialsFile(keyFileLocation))
 }
 
 func newGCPStorageNoCreds(ctx context.Context) (*storage.Client, error) {
-	client := httpClientForGCP(ctx)
-	return storage.NewClient(ctx, option.WithHTTPClient(client))
+	return storage.NewClient(ctx)
 }
 
 func newGCPStorageRawKey(ctx context.Context, rawKey string) (*storage.Client, error) {
@@ -84,23 +81,19 @@ func newGCPStorageRawKey(ctx context.Context, rawKey string) (*storage.Client, e
 }
 
 func newGCPPubSub(ctx context.Context, project string, keyFileLocation string) (*pubsub.Client, error) {
-	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
-	return pubsub.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
+	return pubsub.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
 }
 
 func newGCPKmsClient(ctx context.Context, keyFileLocation string) (*kms.KeyManagementClient, error) {
-	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
-	return kms.NewKeyManagementClient(ctx, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
+	return kms.NewKeyManagementClient(ctx, option.WithCredentialsFile(keyFileLocation))
 }
 
 func newGCPBigTable(ctx context.Context, project string, instance string, keyFileLocation string) (*bigtable.Client, error) {
-	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
-	return bigtable.NewClient(ctx, project, instance, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
+	return bigtable.NewClient(ctx, project, instance, option.WithCredentialsFile(keyFileLocation))
 }
 
 func newGCPDatastore(ctx context.Context, project string, keyFileLocation string) (*datastore.Client, error) {
-	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
-	return datastore.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
+	return datastore.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
@@ -183,16 +176,25 @@ func Main(cmd *cobra.Command, args []string) {
 					return bucket.Object(name)
 				},
 				GCPClientPerKey: make(map[string]s3handler.GCPClient),
+				GCPClientPool: make(map[string][]s3handler.GCPClient),
 			}
 			if awsConfig.DestinationGCPConfig != nil {
-				var gcpClient *storage.Client
+				var gcpClient func() (s3handler.GCPClient, error)
 				var err error
 				if awsConfig.DestinationGCPConfig.KeyFileLocation != nil{
-					gcpClient, err = newGCPStorage(ctx, *awsConfig.DestinationGCPConfig.KeyFileLocation)
+					credInput := *awsConfig.DestinationGCPConfig.KeyFileLocation
+					gcpClient = func() (s3handler.GCPClient, error) {
+						return newGCPStorage(ctx, credInput)
+					}
 				} else if awsConfig.DestinationGCPConfig.KeyFromUrl != nil && *awsConfig.DestinationGCPConfig.KeyFromUrl {
-					gcpClient, err = newGCPStorageNoCreds(ctx)
+					gcpClient = func() (s3handler.GCPClient, error) {
+						return newGCPStorageNoCreds(ctx)
+					}
 				} else {
-					gcpClient, err = newGCPStorageRawKey(ctx, *awsConfig.DestinationGCPConfig.RawKey)
+					credInput := *awsConfig.DestinationGCPConfig.RawKey
+					gcpClient = func() (s3handler.GCPClient, error) {
+						return newGCPStorageRawKey(ctx, credInput)
+					}
 				}
 				if err != nil {
 					panic(fmt.Sprintln("Error setting up gcp client", err))

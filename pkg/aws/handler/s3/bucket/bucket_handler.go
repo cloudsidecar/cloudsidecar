@@ -100,7 +100,16 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 		pageSize = int(*input.MaxKeys)
 	}
 	if wrapper.GCPClient != nil {
-		client := wrapper.GCPRequestSetup(request)
+		client, err := wrapper.GCPRequestSetup(request)
+		if client != nil {
+			defer wrapper.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		bucket = wrapper.BucketRename(bucket)
 		bucketObject := wrapper.GCPClientToBucket(bucket, client)
 		it := bucketObject.Objects(*wrapper.Context, &storage.Query{
@@ -206,7 +215,16 @@ func (wrapper *Handler) ListHandlev2(writer http.ResponseWriter, request *http.R
 		pageSize = int(*input.MaxKeys)
 	}
 	if wrapper.GCPClient != nil {
-		client := wrapper.GCPRequestSetup(request)
+		client, err := wrapper.GCPRequestSetup(request)
+		if client != nil {
+			defer wrapper.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		bucket = wrapper.BucketRename(bucket)
 		bucketObject := wrapper.GCPClientToBucket(bucket, client)
 		it := bucketObject.Objects(*wrapper.Context, &storage.Query{
@@ -278,7 +296,16 @@ func (wrapper *Handler) ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, e
 func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := wrapper.ACLParseInput(request)
 	if wrapper.GCPClient != nil {
-		client := wrapper.GCPRequestSetup(request)
+		client, err := wrapper.GCPRequestSetup(request)
+		if client != nil {
+			defer wrapper.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		bucket := wrapper.BucketRename(*input.Bucket)
 		acl := wrapper.GCPClientToBucket(bucket, client).ACL()
 		aclList, err := acl.List(*wrapper.Context)
