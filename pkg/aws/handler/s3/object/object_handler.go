@@ -2,6 +2,10 @@ package object
 
 import (
 	"cloud.google.com/go/storage"
+	s3_handler "cloudsidecar/pkg/aws/handler/s3"
+	"cloudsidecar/pkg/converter"
+	"cloudsidecar/pkg/logging"
+	"cloudsidecar/pkg/response_type"
 	"crypto/md5"
 	"encoding/xml"
 	"fmt"
@@ -12,12 +16,9 @@ import (
 	"github.com/gorilla/mux"
 	"google.golang.org/api/iterator"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
-	s3_handler "cloudsidecar/pkg/aws/handler/s3"
-	"cloudsidecar/pkg/converter"
-	"cloudsidecar/pkg/logging"
-	"cloudsidecar/pkg/response_type"
 	"sort"
 	"strconv"
 	"strings"
@@ -85,7 +86,16 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 	var resp *response_type.CompleteMultipartUploadResult
 	var err error
 	if handler.GCPClient != nil {
-		client := handler.GCPRequestSetup(request)
+		client, err := handler.GCPRequestSetup(request)
+		if client != nil {
+			defer handler.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
 		f, fileErr := os.Open(path)
 		if fileErr != nil {
@@ -94,9 +104,9 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
-		defer f.Close()
 		objects := make([]*storage.ObjectHandle, 0)
 		sort.Slice(s3Req.MultipartUpload.Parts, func(i, j int) bool {
+			f.Close()
 			return *s3Req.MultipartUpload.Parts[i].PartNumber < *s3Req.MultipartUpload.Parts[j].PartNumber
 		})
 		/*
@@ -121,6 +131,8 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 			object.Delete(*handler.Context)
 		}
 		defer os.Remove(path)
+		defer f.Close()
+		logging.Log.Infof("Finished multipart upload {}", *s3Req.UploadId)
 	} else {
 		logging.LogUsingAWS()
 		req := handler.S3Client.CompleteMultipartUploadRequest(s3Req)
@@ -162,6 +174,7 @@ func (handler *Handler) CompleteMultiPartParseInput(r *http.Request) (*s3.Comple
 	}
 	bodyBytes := make([]byte, 64000)
 	io.ReadFull(r.Body, bodyBytes)
+	defer r.Body.Close()
 	var input response_type.CompleteMultipartUploadInput
 	xml.Unmarshal(bodyBytes, &input)
 	logging.Log.Info("", input.Parts)
@@ -186,12 +199,21 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 	var resp *s3.UploadPartOutput
 	var err error
 	if handler.GCPClient != nil {
-		client := handler.GCPRequestSetup(request)
+		client, err := handler.GCPRequestSetup(request)
+		if client != nil {
+			defer handler.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		key := partFileName(*s3Req.Key, *s3Req.PartNumber)
 		bucket := handler.GCPClientToBucket(*s3Req.Bucket, client)
 		uploader := handler.GCPBucketToObject(key, bucket).NewWriter(*handler.Context)
 		gReq, _ := handler.PutParseInput(request)
-		_, err := converter.GCPUpload(gReq, uploader)
+		_, err = converter.GCPUpload(gReq, uploader)
 		uploader.Close()
 		if err != nil {
 			writer.WriteHeader(404)
@@ -355,12 +377,21 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 	// wg := sync.WaitGroup{}
 	defer request.Body.Close()
 	if handler.GCPClient != nil {
-		client := handler.GCPRequestSetup(request)
+		client, err := handler.GCPRequestSetup(request)
+		if client != nil {
+			defer handler.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).NewWriter(*handler.Context)
 		defer uploader.Close()
-		_, err := converter.GCPUpload(s3Req, uploader)
+		_, err = converter.GCPUpload(s3Req, uploader)
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
@@ -390,11 +421,22 @@ func (handler *Handler) GetParseInput(r *http.Request) (*s3.GetObjectInput, erro
 
 func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := handler.GetParseInput(request)
+	identifier := rand.Int()
 	if header := request.Header.Get("Range"); header != "" {
 		input.Range = &header
 	}
 	if handler.GCPClient != nil {
-		client := handler.GCPRequestSetup(request)
+		logging.Log.Info("Begin GET request", identifier, request.RequestURI, request.Header.Get("Range"))
+		client, err := handler.GCPRequestSetup(request)
+		if client != nil {
+			defer handler.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		bucket := handler.BucketRename(*input.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		objHandle := handler.GCPBucketToObject(*input.Key, bucketHandle)
@@ -404,7 +446,6 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
-		converter.GCSAttrToHeaders(attrs, writer)
 		var reader *storage.Reader
 		var readerError error
 		if input.Range != nil {
@@ -415,6 +456,9 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 			if len(byteSplit) > 1 {
 				endByte, _ := strconv.ParseInt(byteSplit[1], 10, 64)
 				length = endByte + 1 - startByte
+				attrs.Size = length
+			} else {
+				length = attrs.Size - startByte
 			}
 			reader, readerError = objHandle.NewRangeReader(*handler.Context, startByte, length)
 		} else {
@@ -425,24 +469,20 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 			logging.Log.Error("Error %s %s", request.RequestURI, readerError)
 			return
 		}
+		converter.GCSAttrToHeaders(attrs, writer)
 		defer reader.Close()
-		buffer := make([]byte, 4096)
-		for {
-			n, err := reader.Read(buffer)
-			if n > 0 {
-				writer.Write(buffer[:n])
-			}
-			if err == io.EOF {
-				break
-			}
+		if n, writeErr := io.Copy(writer, reader); writeErr != nil {
+			logging.Log.Error("Some error writing", n, identifier, request.RequestURI, writeErr)
+			return
 		}
+		logging.Log.Info("Finish GET request", identifier, request.RequestURI, request.Header.Get("Range"))
 	} else {
 		logging.LogUsingAWS()
 		req := handler.S3Client.GetObjectRequest(input)
 		resp, respError := req.Send()
 		if respError != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s %s", request.RequestURI, respError)
+			logging.Log.Error("Error %s %s", identifier, request.RequestURI, respError)
 			return
 		}
 		if header := resp.ServerSideEncryption; header != "" {
@@ -488,7 +528,16 @@ func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Req
 	input, _ := handler.HeadParseInput(request)
 	if handler.GCPClient != nil {
 		var resp *storage.ObjectAttrs
-		client := handler.GCPRequestSetup(request)
+		client, err := handler.GCPRequestSetup(request)
+		if client != nil {
+			defer handler.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		bucket := handler.BucketRename(*input.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		if strings.HasSuffix(*input.Key, "/") {
@@ -584,7 +633,16 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 	s3Req, _ := handler.CopyParseInput(request)
 	var copyResult response_type.CopyResult
 	if handler.GCPClient != nil {
-		client := handler.GCPRequestSetup(request)
+		client, err := handler.GCPRequestSetup(request)
+		if client != nil {
+			defer handler.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		source := *s3Req.CopySource
 		if strings.Index(source, "/") == 0 {
 			source = source[1:]
@@ -637,11 +695,20 @@ func (handler *Handler) DeleteParseInput(r *http.Request) (*s3.DeleteObjectInput
 func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.Request){
 	s3Req, _ := handler.DeleteParseInput(request)
 	if handler.GCPClient != nil {
-		client := handler.GCPRequestSetup(request)
+		client, err := handler.GCPRequestSetup(request)
+		if client != nil {
+			defer handler.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		objectHandle := handler.GCPBucketToObject(*s3Req.Key, bucketHandle)
-		err := objectHandle.Delete(*handler.Context)
+		err = objectHandle.Delete(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
@@ -669,6 +736,7 @@ func (handler *Handler) MultiDeleteParseInput(r *http.Request) (*s3.DeleteObject
 	}
 	bodyBytes := make([]byte, length)
 	_, err = io.ReadFull(r.Body, bodyBytes)
+	defer r.Body.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +765,16 @@ func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *h
 	response := response_type.MultiDeleteResult{
 	}
 	if handler.GCPClient != nil {
-		client := handler.GCPRequestSetup(request)
+		client, err := handler.GCPRequestSetup(request)
+		if client != nil {
+			defer handler.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		deletedKeys := make([]string, 0)
