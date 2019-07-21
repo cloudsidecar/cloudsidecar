@@ -1,8 +1,6 @@
 package server
 
 import (
-	"cloud.google.com/go/bigtable"
-	"cloud.google.com/go/datastore"
 	"cloud.google.com/go/kms/apiv1"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
@@ -37,9 +35,8 @@ import (
 	"time"
 )
 
-type Handler interface {
-	handleGet(writer http.ResponseWriter, request *http.Request)
-}
+// Creates an http client for GCP.  This is needed so we can set timeouts and not
+// share http/2 connections between gcp uses, which helps with GCS
 func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.Client {
 	roundTrip := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -55,6 +52,7 @@ func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.C
 		MaxIdleConnsPerHost: 1,
 		MaxConnsPerHost: 1,
 	}
+	// This is from the SDK
 	userAgent := "gcloud-golang-storage/20151204"
 	o := []option.ClientOption{
 		option.WithScopes(storage.ScopeFullControl),
@@ -67,35 +65,35 @@ func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.C
 	}
 }
 
+// GCS client based on keyfile
 func newGCPStorage(ctx context.Context, keyFileLocation string) (*storage.Client, error) {
-	return storage.NewClient(ctx, option.WithCredentialsFile(keyFileLocation))
+	client := httpClientForGCP(ctx, option.WithCredentialsFile(keyFileLocation))
+	return storage.NewClient(ctx, option.WithCredentialsFile(keyFileLocation), option.WithHTTPClient(client))
 }
 
+// GCS client without creds.  Those will be added later
 func newGCPStorageNoCreds(ctx context.Context) (*storage.Client, error) {
-	return storage.NewClient(ctx)
+	client := httpClientForGCP(ctx)
+	return storage.NewClient(ctx, option.WithHTTPClient(client))
 }
 
+// GCS client with raw key - string that has contents of key file
 func newGCPStorageRawKey(ctx context.Context, rawKey string) (*storage.Client, error) {
 	client := httpClientForGCP(ctx, option.WithCredentialsJSON([]byte(rawKey)))
 	return storage.NewClient(ctx, option.WithCredentialsJSON([]byte(rawKey)), option.WithHTTPClient(client))
 }
 
+// PubSub client
 func newGCPPubSub(ctx context.Context, project string, keyFileLocation string) (*pubsub.Client, error) {
 	return pubsub.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
 }
 
+// KMS Client (for encryption / decryption)
 func newGCPKmsClient(ctx context.Context, keyFileLocation string) (*kms.KeyManagementClient, error) {
 	return kms.NewKeyManagementClient(ctx, option.WithCredentialsFile(keyFileLocation))
 }
 
-func newGCPBigTable(ctx context.Context, project string, instance string, keyFileLocation string) (*bigtable.Client, error) {
-	return bigtable.NewClient(ctx, project, instance, option.WithCredentialsFile(keyFileLocation))
-}
-
-func newGCPDatastore(ctx context.Context, project string, keyFileLocation string) (*datastore.Client, error) {
-	return datastore.NewClient(ctx, project, option.WithCredentialsFile(keyFileLocation))
-}
-
+// Simple logging middleware for access log
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logging.Log.Noticef("%s %s", r.Method, r.RequestURI)
@@ -103,6 +101,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// Gets all middlewares configured.  Looks in plugin/middleware/ for so files
 func getMiddlewares(enterpriseSystem enterprise.Enterprise, config *conf.Config) map[string]func (http.Handler) http.Handler {
 	results := make(map[string]func (http.Handler) http.Handler)
 	enterpriseMiddlewares := enterpriseSystem.RegisterMiddlewares()
@@ -128,15 +127,17 @@ func getMiddlewares(enterpriseSystem enterprise.Enterprise, config *conf.Config)
 	return results
 }
 
+// Main function, runs http server
 func Main(cmd *cobra.Command, args []string) {
 	var config conf.Config
 	var serverWaitGroup sync.WaitGroup
 	var enterpriseSystem enterprise.Enterprise
+	awsHandlers := make(map[string]awshandler.HandlerInterface)
 	enterprise.RegisterType(reflect.TypeOf(enterprise.Noop{}))
 	enterpriseSystem = enterprise.GetSingleton()
+	// set up logger and config reloader
 	logging.LoadConfig(&config)
 	viper.WatchConfig()
-	awsHandlers := make(map[string]awshandler.HandlerInterface)
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		logging.Log.Debug("Config file changed:", e.Name)
 		logging.LoadConfig(&config)
@@ -146,6 +147,7 @@ func Main(cmd *cobra.Command, args []string) {
 	})
 	logging.Log.Info("Started... ")
 	middlewares := getMiddlewares(enterpriseSystem, &config)
+	// for each configured aws config, we want to set up an http listener
 	for key, awsConfig := range config.AwsConfigs  {
 		toListen := true
 		port := awsConfig.Port
@@ -154,7 +156,6 @@ func Main(cmd *cobra.Command, args []string) {
 		configs := defaults.Config()
 		creds := aws.NewStaticCredentialsProvider(awsConfig.DestinationAWSConfig.AccessKeyId, awsConfig.DestinationAWSConfig.SecretAccessKey, "" )
 		configs.Credentials = creds
-		//configs.EndpointResolver = aws.ResolveWithEndpointURL("http://localhost:9000")
 		configs.Region = endpoints.UsEast1RegionID
 		ctx := context.Background()
 		for _, middlewareName := range awsConfig.Middleware {
@@ -166,6 +167,7 @@ func Main(cmd *cobra.Command, args []string) {
 		}
 		if awsConfig.ServiceType == "s3" {
 			svc := s3.New(configs)
+			// set up generic handler for s3
 			handler := s3handler.Handler{
 				S3Client: svc,
 				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
@@ -179,8 +181,8 @@ func Main(cmd *cobra.Command, args []string) {
 				GCPClientPool: make(map[string][]s3handler.GCPClient),
 			}
 			if awsConfig.DestinationGCPConfig != nil {
+				// use GCS
 				var gcpClient func() (s3handler.GCPClient, error)
-				var err error
 				if awsConfig.DestinationGCPConfig.KeyFileLocation != nil{
 					credInput := *awsConfig.DestinationGCPConfig.KeyFileLocation
 					gcpClient = func() (s3handler.GCPClient, error) {
@@ -196,15 +198,13 @@ func Main(cmd *cobra.Command, args []string) {
 						return newGCPStorageRawKey(ctx, credInput)
 					}
 				}
-				if err != nil {
-					panic(fmt.Sprintln("Error setting up gcp client", err))
-				}
 				handler.GCPClient = gcpClient
 				handler.Context = &ctx
 			}
 			bucketHandler := bucket.New(&handler)
 			objectHandler := object.New(&handler)
 			awsHandlers[key] = &handler
+			// register http handlers for bucket requests and object requests
 			bucketHandler.Register(r)
 			objectHandler.Register(r)
 		} else if awsConfig.ServiceType == "kinesis" {
@@ -220,6 +220,7 @@ func Main(cmd *cobra.Command, args []string) {
 				},
 			}
 			if awsConfig.DestinationGCPConfig != nil {
+				// use pubsub
 				gcpClient, err := newGCPPubSub(
 					ctx,
 					awsConfig.DestinationGCPConfig.Project,
@@ -253,6 +254,7 @@ func Main(cmd *cobra.Command, args []string) {
 				ToAck: make(map[string]chan bool),
 			}
 			if awsConfig.DestinationGCPConfig != nil {
+				// use pubsub
 				gcpClient, err := newGCPPubSub(
 					ctx,
 					awsConfig.DestinationGCPConfig.Project,
@@ -277,6 +279,7 @@ func Main(cmd *cobra.Command, args []string) {
 			toListen = false
 			// do nothing, enterprise got this
 		} else {
+			// look for plugins for handlers
 			plug, err := plugin.Open(fmt.Sprint("plugin/handler/", awsConfig.ServiceType, ".so"))
 			if err != nil {
 				logging.Log.Error("Cannot load plugin ", awsConfig.ServiceType, " for port ", awsConfig.Port, err)
@@ -298,6 +301,7 @@ func Main(cmd *cobra.Command, args []string) {
 			writer.WriteHeader(404)
 		})
 		serverWaitGroup.Add(1)
+		// listen for all handlers
 		if toListen {
 			srv := &http.Server{
 				Handler: r,

@@ -1,3 +1,5 @@
+// Handle S3 bucket style requests
+
 package bucket
 
 import (
@@ -17,14 +19,11 @@ import (
 )
 
 
-type HandlerPlugin interface {
-	init(handler s3_handler.Handler)
-}
-
 type Handler struct {
 	*s3_handler.Handler
 }
 
+// Interface for bucket functions
 type Bucket interface {
 	ListHandlev2(writer http.ResponseWriter, request *http.Request)
 	Listv2ParseInput(r *http.Request) (*s3.ListObjectsInput, error)
@@ -40,6 +39,7 @@ func New(s3Handler *s3_handler.Handler) *Handler {
 	return &Handler{s3Handler}
 }
 
+// Register HTTP patterns to functions
 func (wrapper *Handler) Register(mux *mux.Router) {
 	keyFromUrl := wrapper.Config.Get("gcp_destination_config.key_from_url")
 	if keyFromUrl != nil && keyFromUrl == true{
@@ -59,6 +59,7 @@ func (wrapper *Handler) Register(mux *mux.Router) {
 	}
 }
 
+// Parse input to handle listv1 requests
 func (wrapper *Handler) ListParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
 	vars := mux.Vars(request)
 	bucket := vars["bucket"]
@@ -86,6 +87,7 @@ func (wrapper *Handler) ListParseInput(request *http.Request) (*s3.ListObjectsIn
 	return listRequest, nil
 }
 
+// Handle listv1 requests.  These paginate using the last item you received as an offset
 func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Request) {
 	input, err := wrapper.ListParseInput(request)
 	if err != nil {
@@ -100,8 +102,11 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 		pageSize = int(*input.MaxKeys)
 	}
 	if wrapper.GCPClient != nil {
+		// Use GCS
+		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := wrapper.GCPRequestSetup(request)
 		if client != nil {
+			// return gcp client after done
 			defer wrapper.ReturnConnection(client, request)
 		}
 		if err != nil {
@@ -171,6 +176,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 	writer.Write([]byte(string(output)))
 }
 
+// Parse input for listv2 requests
 func (wrapper *Handler) Listv2ParseInput(request *http.Request) (*s3.ListObjectsInput, error) {
 	vars := mux.Vars(request)
 	bucket := vars["bucket"]
@@ -201,6 +207,7 @@ func (wrapper *Handler) Listv2ParseInput(request *http.Request) (*s3.ListObjects
 	return listRequest, nil
 }
 
+// Handle listv2 requests.  These paginate using a token
 func (wrapper *Handler) ListHandlev2(writer http.ResponseWriter, request *http.Request) {
 	input, err := wrapper.Listv2ParseInput(request)
 	if err != nil {
@@ -215,8 +222,11 @@ func (wrapper *Handler) ListHandlev2(writer http.ResponseWriter, request *http.R
 		pageSize = int(*input.MaxKeys)
 	}
 	if wrapper.GCPClient != nil {
+		// Use GCS
+		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := wrapper.GCPRequestSetup(request)
 		if client != nil {
+			// Return connection to pool after done
 			defer wrapper.ReturnConnection(client, request)
 		}
 		if err != nil {
@@ -287,17 +297,22 @@ func (wrapper *Handler) ListHandlev2(writer http.ResponseWriter, request *http.R
 }
 
 
+// Parse input for ACL request
 func (wrapper *Handler) ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, error) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	return &s3.GetBucketAclInput{Bucket: &bucket}, nil
 }
 
+// Handle ACL Request
 func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := wrapper.ACLParseInput(request)
 	if wrapper.GCPClient != nil {
+		// Use GCS
+		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := wrapper.GCPRequestSetup(request)
 		if client != nil {
+			// Return connection to pool after done
 			defer wrapper.ReturnConnection(client, request)
 		}
 		if err != nil {
@@ -312,6 +327,7 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 		if err != nil {
 			logging.Log.Error("Error with GCP %s %s", request.RequestURI, err)
 			if strings.Contains(err.Error(), "Error 403") {
+				// 403 error used by spark to determine existence of path, need to return proper error
 				code := "AccessDenied"
 				message := "Access Denied"
 				xmlResponse := response_type.AWSACLResponseError{
