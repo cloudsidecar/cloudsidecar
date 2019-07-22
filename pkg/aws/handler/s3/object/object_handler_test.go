@@ -58,7 +58,7 @@ func TestHandler_PutParseInput(t *testing.T) {
 	handler := New(nil)
 	result, _ := handler.PutParseInput(req)
 	if *result.Bucket != "boops" {
-		t.Error("Bucket should be boops")
+		t.Error("Object should be boops")
 	}
 	if *result.Key != "mykey" {
 		t.Error("Key should be mykey")
@@ -117,7 +117,7 @@ func TestHandler_GetParseInput(t *testing.T) {
 	handler := New(nil)
 	result, _ := handler.GetParseInput(req)
 	if *result.Bucket != "boops" {
-		t.Error("Bucket should be boops")
+		t.Error("Object should be boops")
 	}
 	if *result.Key != "mykey" {
 		t.Error("Key should be mykey")
@@ -179,7 +179,7 @@ func TestHandler_HeadParseInput(t *testing.T) {
 	handler := New(nil)
 	result, _ := handler.HeadParseInput(req)
 	if *result.Bucket != "boops" {
-		t.Error("Bucket should be boops")
+		t.Error("Object should be boops")
 	}
 	if *result.Key != "mykey" {
 		t.Error("Key should be mykey")
