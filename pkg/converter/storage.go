@@ -92,6 +92,7 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	nextToken := ""
 	var err error
 	lastItem := ""
+	// loop through until we have enough objects and folder, or until nothing is left
 	for contentI + prefixI < pageSize {
 		var pageResponse []*storage.ObjectAttrs
 		nextToken, err = iterator.NewPager(input, pageSize, nextToken).NextPage(&pageResponse)
@@ -99,22 +100,27 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 			logging.Log.Error("Some error paginating", err)
 			return nil, err
 		}
+		// loop through each result, see if it is an object or folder, handle accordingly
 		for _, item := range pageResponse {
 			if contentI + prefixI >= pageSize {
 				break
 			}
 			if marker != "" {
+				// we are looking for some offset.  skip items until we pass this
 				if item.Name == marker || item.Prefix == marker {
+					// this is that offset, now return items
 					marker = ""
 				}
 			} else {
 				if strings.HasSuffix(item.Name, "/") {
-
+					// weird phantom item in gcs
 				} else if item.Name != "" {
+					// object not folder
 					contents[contentI] = GCSItemToContent(item)
 					lastItem = item.Name
 					contentI++
 				} else {
+					// folder
 					prefixes[prefixI] = GCSItemToPrefix(item)
 					lastItem = item.Prefix
 					prefixI++
@@ -134,6 +140,7 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	return s3Resp, nil
 }
 
+// new version of aws listing does same pagination as gcs
 func GCSListResponseToAWSv2(input *storage.ObjectIterator, listRequest *s3.ListObjectsInput, pageSize int) (*response_type.AWSListBucketResponse, error) {
 	contentI := 0
 	prefixI := 0
@@ -150,11 +157,14 @@ func GCSListResponseToAWSv2(input *storage.ObjectIterator, listRequest *s3.ListO
 	var prefixes = make([]*response_type.BucketCommonPrefix, len(pageResponse))
 	for _, item := range pageResponse {
 		if strings.HasSuffix(item.Name, "/") {
+			// weird gcs phantom item
 
 		} else if item.Name != "" {
+			// object
 			contents[contentI] = GCSItemToContent(item)
 			contentI++
 		} else {
+			// folder
 			prefixes[prefixI] = GCSItemToPrefix(item)
 			prefixI++
 		}
@@ -195,7 +205,6 @@ func GCSAttrToHeaders(input *storage.ObjectAttrs, writer http.ResponseWriter) {
 func GCSACLResponseToAWS(input []storage.ACLRule) response_type.AWSACLResponse {
 	response := response_type.AWSACLResponse{}
 	// lets only do head
-	// var grants = make([]*response_type.Grant, len(input))
 	var grants = make([]*response_type.Grant, 1)
 	if len(input) > 0 {
 		for i, entry := range input[:1] {
