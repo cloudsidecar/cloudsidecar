@@ -11,6 +11,7 @@ import (
 	"crypto/md5"
 	"encoding/xml"
 	"fmt"
+	"github.com/avast/retry-go"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
@@ -114,6 +115,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
+		f.Close()
 		objects := make([]*storage.ObjectHandle, 0)
 		sort.Slice(s3Req.MultipartUpload.Parts, func(i, j int) bool {
 			return *s3Req.MultipartUpload.Parts[i].PartNumber < *s3Req.MultipartUpload.Parts[j].PartNumber
@@ -127,13 +129,18 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		}
 
 		// Join pieces
-		gResp, _ := handler.GCPBucketToObject(*s3Req.Key, bucket).ComposerFrom(objects...).Run(*handler.Context)
+		gResp, err := handler.GCPBucketToObject(*s3Req.Key, bucket).ComposerFrom(objects...).Run(*handler.Context)
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
+		defer os.Remove(path)
 		resp = converter.GCSAttrToCombine(gResp)
 		for _, object := range objects {
 			object.Delete(*handler.Context)
 		}
-		defer os.Remove(path)
-		defer f.Close()
 		logging.Log.Infof("Finished multipart upload {}", *s3Req.UploadId)
 	} else {
 		logging.LogUsingAWS()
@@ -197,6 +204,21 @@ func partFileName(key string, part int64) string {
 	return fmt.Sprintf("%s-part-%d", key, part)
 }
 
+func (handler *Handler) getGCPAttrsWithRetry(object s3_handler.GCPObject) (attrs *storage.ObjectAttrs, err error) {
+	var attributes *storage.ObjectAttrs
+	errors := retry.Do(
+		func() error {
+			attributes, err = object.Attrs(*handler.Context)
+			return err
+		},
+		retry.OnRetry(func(n uint, err error) {
+			logging.Log.Warning("GCP Attrs Retry #%d: %s\n", n, err)
+		}),
+		retry.Delay(1 * time.Second),
+	)
+	return attributes, errors
+}
+
 // Handle uploading part of a multipart file
 func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.UploadPartParseInput(request)
@@ -221,14 +243,20 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 		uploader := handler.GCPBucketToObject(key, bucket).NewWriter(*handler.Context)
 		gReq, _ := handler.PutParseInput(request)
 		_, err = converter.GCPUpload(gReq, uploader)
-		defer uploader.Close()
+		uploader.Close()
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
-		attrs, _ := handler.GCPBucketToObject(key, bucket).Attrs(*handler.Context)
+		attrs, err := handler.getGCPAttrsWithRetry(handler.GCPBucketToObject(key, bucket))
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error %s %s %s %s", request.RequestURI, bucket, key, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
 		converter.GCSAttrToHeaders(attrs, writer)
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
 		logging.Log.Info(path)
@@ -407,8 +435,8 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 		bucket := handler.BucketRename(*s3Req.Bucket)
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).NewWriter(*handler.Context)
-		defer uploader.Close()
 		_, err = converter.GCPUpload(s3Req, uploader)
+		uploader.Close()
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
@@ -825,7 +853,7 @@ func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *h
 			}
 		}
 		// aws never returns failed deletes
-		logging.Log.Debugf("failed keys %s succeeded keys", failedKeys, deletedKeys)
+		logging.Log.Debugf("failed keys %s succeeded keys %s", failedKeys, deletedKeys)
 		deletedObjects := make([]*response_type.DeleteObject, len(deletedKeys))
 		for i, obj := range deletedKeys {
 			deletedObjects[i] = &response_type.DeleteObject{
