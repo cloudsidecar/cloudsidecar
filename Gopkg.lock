@@ -2,12 +2,9 @@
 
 
 [[projects]]
-  digest = "1:b63f5cba1d1f3f3dbdde735141c58860041caa76a07dd6ee233a53a42f5e3268"
+  digest = "1:54d223b5e6e27bbc300c1df533e87b57a2b3f7261c02c379b5cae02be865b6fb"
   name = "cloud.google.com/go"
   packages = [
-    "bigtable",
-    "bigtable/internal/gax",
-    "bigtable/internal/option",
     "compute/metadata",
     "datastore",
     "iam",
@@ -17,8 +14,6 @@
     "internal/trace",
     "internal/version",
     "kms/apiv1",
-    "longrunning",
-    "longrunning/autogen",
     "pubsub",
     "pubsub/apiv1",
     "pubsub/internal/distribution",
@@ -35,6 +30,14 @@
   pruneopts = "UT"
   revision = "be58ebffde8e29c154192c019608f0a5b8e6a064"
   version = "4.7.2"
+
+[[projects]]
+  digest = "1:7c51a593e7593dbbaec61e209bdd04095995362834e4399aaa5a9227c25bb403"
+  name = "github.com/avast/retry-go"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "101acd3290b786bf437607d874596e3996484d8d"
+  version = "v2.4.1"
 
 [[projects]]
   digest = "1:3d0c336547ad516f3fc5b9138ea304c85ab6db947ba950c27359417350c70121"
@@ -375,10 +378,9 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:1b8989bd62da0e1969485cb5b163689c8eede0dff89f0c69d75c93f7af51fd90"
+  digest = "1:09b53f1be31931834fe6c2837693b7bffde7cdae1ea8723ae642b97a326b149f"
   name = "google.golang.org/api"
   packages = [
-    "cloudresourcemanager/v1",
     "gensupport",
     "googleapi",
     "googleapi/internal/uritemplates",
@@ -419,16 +421,13 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:61e489e8bf2eba85a08a3cddba119e085785d7aeb2c119675348887ef215a02d"
+  digest = "1:1fc7cf8ff17bf6ea885b395708b6b21d140e578fc360454e08e84bee730a937f"
   name = "google.golang.org/genproto"
   packages = [
     "googleapis/api/annotations",
-    "googleapis/bigtable/admin/v2",
-    "googleapis/bigtable/v2",
     "googleapis/cloud/kms/v1",
     "googleapis/datastore/v1",
     "googleapis/iam/v1",
-    "googleapis/longrunning",
     "googleapis/pubsub/v1",
     "googleapis/rpc/code",
     "googleapis/rpc/status",
@@ -491,12 +490,12 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "cloud.google.com/go/bigtable",
     "cloud.google.com/go/datastore",
     "cloud.google.com/go/kms/apiv1",
     "cloud.google.com/go/pubsub",
     "cloud.google.com/go/storage",
     "github.com/antlr/antlr4/runtime/Go/antlr",
+    "github.com/avast/retry-go",
     "github.com/aws/aws-sdk-go-v2/aws",
     "github.com/aws/aws-sdk-go-v2/aws/defaults",
     "github.com/aws/aws-sdk-go-v2/aws/endpoints",
@@ -515,6 +514,7 @@
     "github.com/stretchr/testify/assert",
     "google.golang.org/api/iterator",
     "google.golang.org/api/option",
+    "google.golang.org/api/transport/http",
     "google.golang.org/genproto/googleapis/cloud/kms/v1",
     "gopkg.in/yaml.v2",
   ]
