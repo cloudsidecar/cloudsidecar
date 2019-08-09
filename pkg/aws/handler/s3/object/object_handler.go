@@ -87,6 +87,17 @@ func (handler *Handler) Register(mux *mux.Router) {
 	}
 }
 
+func writeInternalError(writer http.ResponseWriter, message string) {
+	code := "InternalError"
+	xmlResponse := response_type.AWSACLResponseError{
+		Code: &code,
+		Message: &message,
+	}
+	output, _ := xml.Marshal(xmlResponse)
+	writer.Write([]byte(s3_handler.XmlHeader))
+	writer.Write(output)
+}
+
 // Handle completing multipart upload
 func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, request *http.Request){
 	s3Req, _ := handler.CompleteMultiPartParseInput(request)
@@ -103,16 +114,17 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		if err != nil {
 			writer.WriteHeader(400)
 			logging.Log.Error("Error a %s %s", request.RequestURI, err)
-			writer.Write([]byte(string(fmt.Sprint(err))))
+			writeInternalError(writer, err.Error())
 			return
 		}
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
 		// Read file that stored locations of parts
 		f, fileErr := os.Open(path)
 		if fileErr != nil {
+			f.Close()
 			writer.WriteHeader(404)
 			logging.Log.Error("Error a %s %s", request.RequestURI, fileErr)
-			writer.Write([]byte(string(fmt.Sprint(err))))
+			writeInternalError(writer, fileErr.Error())
 			return
 		}
 		f.Close()
@@ -133,14 +145,20 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		if err != nil {
 			writer.WriteHeader(400)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
-			writer.Write([]byte(string(fmt.Sprint(err))))
+			writeInternalError(writer, err.Error())
 			return
 		}
-		defer os.Remove(path)
 		resp = converter.GCSAttrToCombine(gResp)
 		for _, object := range objects {
-			object.Delete(*handler.Context)
+			deleteErr := handler.deleteGCPObjectWithRetry(object)
+			if deleteErr != nil {
+				writer.WriteHeader(400)
+				logging.Log.Error("Error %s %s", request.RequestURI, err)
+				writeInternalError(writer, err.Error())
+				return
+			}
 		}
+		defer os.Remove(path)
 		logging.Log.Infof("Finished multipart upload {}", *s3Req.UploadId)
 	} else {
 		logging.LogUsingAWS()
@@ -204,6 +222,22 @@ func partFileName(key string, part int64) string {
 	return fmt.Sprintf("%s-part-%d", key, part)
 }
 
+// Delete gcp object and retry on failure
+func (handler *Handler) deleteGCPObjectWithRetry(object s3_handler.GCPObject) error {
+	errors := retry.Do(
+		func() error {
+			err := object.Delete(*handler.Context)
+			return err
+		},
+		retry.OnRetry(func(n uint, err error) {
+			logging.Log.Warning("GCP Delete Retry #%d: %s\n", n, err)
+		}),
+		retry.Delay(1 * time.Second),
+	)
+	return errors
+}
+
+// Get gcp attributes of object and retry on failure
 func (handler *Handler) getGCPAttrsWithRetry(object s3_handler.GCPObject) (attrs *storage.ObjectAttrs, err error) {
 	var attributes *storage.ObjectAttrs
 	errors := retry.Do(
