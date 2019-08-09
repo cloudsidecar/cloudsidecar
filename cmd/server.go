@@ -16,11 +16,14 @@ var rootCmd = &cobra.Command{
 	Run: server.Main,
 }
 
+
 var configFile string
+var versionFlag bool
 
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file")
+	rootCmd.PersistentFlags().BoolVar(&versionFlag, "version", false, "display version")
 }
 
 
@@ -33,6 +36,10 @@ func Execute() {
 
 func initConfig() {
 	logging.Init("", "")
+	if versionFlag {
+		fmt.Println(server.Version)
+		os.Exit(0)
+	}
 	viper.SetConfigFile(configFile)
 	err := viper.ReadInConfig()
 	if err != nil {

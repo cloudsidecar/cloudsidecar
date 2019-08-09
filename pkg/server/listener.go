@@ -35,6 +35,8 @@ import (
 	"time"
 )
 
+const Version = "0.0.12"
+
 // Creates an http client for GCP.  This is needed so we can set timeouts and not
 // share http/2 connections between gcp uses, which helps with GCS
 func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.Client {
@@ -145,7 +147,7 @@ func Main(cmd *cobra.Command, args []string) {
 			handler.SetConfig(viper.Sub(fmt.Sprint("aws_configs.", key)))
 		}
 	})
-	logging.Log.Info("Started... ")
+	logging.Log.Infof("Started %s.. ", Version)
 	middlewares := getMiddlewares(enterpriseSystem, &config)
 	// for each configured aws config, we want to set up an http listener
 	for key, awsConfig := range config.AwsConfigs  {
