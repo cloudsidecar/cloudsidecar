@@ -9,13 +9,13 @@ import (
 )
 
 type Handler struct {
-	KinesisClient *kinesis.Kinesis
-	GCPClient GCPClient
+	KinesisClient    *kinesis.Kinesis
+	GCPClient        GCPClient
 	GCPClientToTopic func(topic string, client GCPClient) GCPTopic
 	GCPResultWrapper func(result *pubsub.PublishResult) GCPPublishResult
-	GCPKMSClient *kms.KeyManagementClient
-	Context *context.Context
-	Config *viper.Viper
+	GCPKMSClient     *kms.KeyManagementClient
+	Context          *context.Context
+	Config           *viper.Viper
 }
 
 type HandlerInterface interface {
@@ -35,13 +35,13 @@ func (handler *Handler) GetKinesisClient() *kinesis.Kinesis {
 func (handler *Handler) GetGCPClient() GCPClient {
 	return handler.GCPClient
 }
-func (handler *Handler) GetContext() *context.Context{
+func (handler *Handler) GetContext() *context.Context {
 	return handler.Context
 }
 func (handler *Handler) GetConfig() *viper.Viper {
 	return handler.Config
 }
-func (handler *Handler) SetKinesisClient(kinesisClient *kinesis.Kinesis){
+func (handler *Handler) SetKinesisClient(kinesisClient *kinesis.Kinesis) {
 	handler.KinesisClient = kinesisClient
 }
 func (handler *Handler) SetGCPClient(gcpClient GCPClient) {

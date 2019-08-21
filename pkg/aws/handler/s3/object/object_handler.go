@@ -61,7 +61,7 @@ type Object interface {
 // Register all HTTP handlers
 func (handler *Handler) Register(mux *mux.Router) {
 	keyFromUrl := handler.Config.Get("gcp_destination_config.key_from_url")
-	if keyFromUrl != nil && keyFromUrl == true{
+	if keyFromUrl != nil && keyFromUrl == true {
 		// Credits will be pased in URL instead of config
 		mux.HandleFunc("/{creds}/{bucket}/{key:[^#?\\s]+}", handler.HeadHandle).Methods("HEAD")
 		mux.HandleFunc("/{creds}/{bucket}/{key:[^#?\\s]+}", handler.GetHandle).Methods("GET")
@@ -90,7 +90,7 @@ func (handler *Handler) Register(mux *mux.Router) {
 func writeInternalError(writer http.ResponseWriter, message string) {
 	code := "InternalError"
 	xmlResponse := response_type.AWSACLResponseError{
-		Code: &code,
+		Code:    &code,
 		Message: &message,
 	}
 	output, _ := xml.Marshal(xmlResponse)
@@ -99,7 +99,7 @@ func writeInternalError(writer http.ResponseWriter, message string) {
 }
 
 // Handle completing multipart upload
-func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, request *http.Request){
+func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.CompleteMultiPartParseInput(request)
 	var resp *response_type.CompleteMultipartUploadResult
 	var err error
@@ -172,9 +172,9 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 			return
 		}
 		resp = &response_type.CompleteMultipartUploadResult{
-			Bucket: s3Resp.Bucket,
-			Key: s3Resp.Key,
-			ETag: s3Resp.ETag,
+			Bucket:   s3Resp.Bucket,
+			Key:      s3Resp.Key,
+			ETag:     s3Resp.ETag,
 			Location: s3Resp.Location,
 		}
 	}
@@ -196,8 +196,8 @@ func (handler *Handler) CompleteMultiPartParseInput(r *http.Request) (*s3.Comple
 	key := vars["key"]
 	uploadId := vars["uploadId"]
 	s3Req := &s3.CompleteMultipartUploadInput{
-		Bucket: &bucket,
-		Key:    &key,
+		Bucket:   &bucket,
+		Key:      &key,
 		UploadId: &uploadId,
 	}
 	bodyBytes := make([]byte, 64000)
@@ -211,7 +211,7 @@ func (handler *Handler) CompleteMultiPartParseInput(r *http.Request) (*s3.Comple
 	}
 	for i, part := range input.Parts {
 		s3Req.MultipartUpload.Parts[i] = s3.CompletedPart{
-			ETag: part.ETag,
+			ETag:       part.ETag,
 			PartNumber: part.PartNumber,
 		}
 	}
@@ -232,7 +232,7 @@ func (handler *Handler) deleteGCPObjectWithRetry(object s3_handler.GCPObject) er
 		retry.OnRetry(func(n uint, err error) {
 			logging.Log.Warning("GCP Delete Retry #%d: %s\n", n, err)
 		}),
-		retry.Delay(1 * time.Second),
+		retry.Delay(1*time.Second),
 	)
 	return errors
 }
@@ -248,7 +248,7 @@ func (handler *Handler) getGCPAttrsWithRetry(object s3_handler.GCPObject) (attrs
 		retry.OnRetry(func(n uint, err error) {
 			logging.Log.Warning("GCP Attrs Retry #%d: %s\n", n, err)
 		}),
-		retry.Delay(1 * time.Second),
+		retry.Delay(1*time.Second),
 	)
 	return attributes, errors
 }
@@ -343,15 +343,15 @@ func (handler *Handler) UploadPartParseInput(r *http.Request) (*s3.UploadPartInp
 	partNumber, err := strconv.ParseInt(vars["partNumber"], 10, 64)
 	uploadId := vars["uploadId"]
 	return &s3.UploadPartInput{
-		Bucket: &bucket,
-		Key: &key,
+		Bucket:     &bucket,
+		Key:        &key,
 		PartNumber: &partNumber,
-		UploadId: &uploadId,
+		UploadId:   &uploadId,
 	}, err
 }
 
 // Handle request to create multipart upload
-func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *http.Request){
+func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.MultiPartParseInput(request)
 	var resp *response_type.InitiateMultipartUploadResult
 	var createResp *s3.CreateMultipartUploadOutput
@@ -370,20 +370,20 @@ func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *htt
 		defer f.Close()
 		logging.Log.Info(uuid)
 		resp = &response_type.InitiateMultipartUploadResult{
-			Key: s3Req.Key,
-			Bucket: s3Req.Bucket,
+			Key:      s3Req.Key,
+			Bucket:   s3Req.Bucket,
 			UploadId: &uuid,
-			XmlNS: response_type.ACLXmlNs,
+			XmlNS:    response_type.ACLXmlNs,
 		}
 	} else {
 		logging.LogUsingAWS()
 		req := handler.S3Client.CreateMultipartUploadRequest(s3Req)
 		createResp, err = req.Send()
 		resp = &response_type.InitiateMultipartUploadResult{
-			Key: s3Req.Key,
-			Bucket: s3Req.Bucket,
+			Key:      s3Req.Key,
+			Bucket:   s3Req.Bucket,
 			UploadId: createResp.UploadId,
-			XmlNS: response_type.ACLXmlNs,
+			XmlNS:    response_type.ACLXmlNs,
 		}
 	}
 	if err != nil {
@@ -416,7 +416,7 @@ func (handler *Handler) PutParseInput(r *http.Request) (*s3manager.UploadInput, 
 	key := vars["key"]
 	s3Req := &s3manager.UploadInput{
 		Bucket: &bucket,
-		Key: &key,
+		Key:    &key,
 	}
 	if header := r.Header.Get("Content-MD5"); header != "" {
 		s3Req.ContentMD5 = &header
@@ -439,7 +439,7 @@ func (handler *Handler) PutParseInput(r *http.Request) (*s3manager.UploadInput, 
 	} else {
 		logging.Log.Debug("CHUNKED %d", contentLength)
 		readerWrapper := ChunkedReaderWrapper{
-			Reader:         &r.Body,
+			Reader:            &r.Body,
 			ChunkNextPosition: -1,
 		}
 		s3Req.Body = &readerWrapper
@@ -448,7 +448,7 @@ func (handler *Handler) PutParseInput(r *http.Request) (*s3manager.UploadInput, 
 }
 
 // Handle an upload
-func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Request){
+func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.PutParseInput(request)
 	var err error
 	defer request.Body.Close()
@@ -627,12 +627,12 @@ func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Req
 			//directories dont have header info so fake it
 			it := bucketHandle.Objects(*handler.Context, &storage.Query{
 				Delimiter: "/",
-				Prefix: *input.Key,
-				Versions: false,
+				Prefix:    *input.Key,
+				Versions:  false,
 			})
 			var pageResponse []*storage.ObjectAttrs
 			_, err := iterator.NewPager(it, 1, "").NextPage(&pageResponse)
-			if err != nil{
+			if err != nil {
 				writer.WriteHeader(404)
 				logging.Log.Error("Error %s %s", request.RequestURI, err)
 				return
@@ -644,10 +644,10 @@ func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Req
 			}
 			hash := md5.Sum([]byte(time.Now().String()))
 			resp = &storage.ObjectAttrs{
-				Bucket: *input.Bucket,
-				Name: *input.Key,
+				Bucket:  *input.Bucket,
+				Name:    *input.Key,
 				Updated: time.Now(),
-				MD5: hash[:],
+				MD5:     hash[:],
 			}
 		} else {
 			var err error
@@ -703,8 +703,8 @@ func (handler *Handler) CopyParseInput(r *http.Request) (*s3.CopyObjectInput, er
 	key := vars["key"]
 	source := r.Header.Get("x-amz-copy-source")
 	s3Req := &s3.CopyObjectInput{
-		Bucket: &bucket,
-		Key: &key,
+		Bucket:     &bucket,
+		Key:        &key,
 		CopySource: &source,
 	}
 	if header := r.Header.Get("Content-Type"); header != "" {
@@ -714,7 +714,7 @@ func (handler *Handler) CopyParseInput(r *http.Request) (*s3.CopyObjectInput, er
 }
 
 // Handle copy command
-func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Request){
+func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.CopyParseInput(request)
 	var copyResult response_type.CopyResult
 	if handler.GCPClient != nil {
@@ -761,7 +761,7 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 		}
 		copyResult = response_type.CopyResult{
 			LastModified: converter.FormatTimeZulu(result.CopyObjectResult.LastModified),
-			ETag: *result.CopyObjectResult.ETag,
+			ETag:         *result.CopyObjectResult.ETag,
 		}
 	}
 	output, _ := xml.MarshalIndent(copyResult, "  ", "    ")
@@ -776,13 +776,13 @@ func (handler *Handler) DeleteParseInput(r *http.Request) (*s3.DeleteObjectInput
 	key := vars["key"]
 	s3Req := &s3.DeleteObjectInput{
 		Bucket: &bucket,
-		Key: &key,
+		Key:    &key,
 	}
 	return s3Req, nil
 }
 
 // Handle delete operation
-func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.Request){
+func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.DeleteParseInput(request)
 	if handler.GCPClient != nil {
 		// Use GCS
@@ -855,10 +855,9 @@ func (handler *Handler) MultiDeleteParseInput(r *http.Request) (*s3.DeleteObject
 }
 
 // Handle request for deleting multiple files
-func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *http.Request){
+func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.MultiDeleteParseInput(request)
-	response := response_type.MultiDeleteResult{
-	}
+	response := response_type.MultiDeleteResult{}
 	if handler.GCPClient != nil {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
@@ -914,8 +913,8 @@ func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *h
 		failedObjects := make([]*response_type.ErrorResult, len(resp.Errors))
 		for i, obj := range resp.Errors {
 			failedObjects[i] = &response_type.ErrorResult{
-				Key: obj.Key,
-				Code: obj.Code,
+				Key:     obj.Key,
+				Code:    obj.Code,
 				Message: obj.Message,
 			}
 		}

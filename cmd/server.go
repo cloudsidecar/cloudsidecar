@@ -19,12 +19,11 @@ var change chan string
 var rootCmd = &cobra.Command{
 	Use:   "server",
 	Short: "Run cloud cloudsidecar",
-	Long: `Run cloud cloudsidecar`,
+	Long:  `Run cloud cloudsidecar`,
 	Run: func(cmd *cobra.Command, args []string) {
 		server.Main(config, change, cmd, args)
 	},
 }
-
 
 var configFile string
 var configDir string
@@ -37,7 +36,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&configDir, "config-dir", "", "config directory")
 	rootCmd.PersistentFlags().BoolVar(&versionFlag, "version", false, "display version")
 }
-
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
@@ -84,17 +82,17 @@ func readInConfigsFromDirectory() error {
 
 func watchMultipleFiles() {
 	select {
-		case e, ok := <-watcher.Events:
-			if ok {
-				if err := readInConfigsFromDirectory(); err != nil {
-					logging.Log.Error("Error reloading", err)
-				}
-				change <- e.Name
-				return
+	case e, ok := <-watcher.Events:
+		if ok {
+			if err := readInConfigsFromDirectory(); err != nil {
+				logging.Log.Error("Error reloading", err)
 			}
-		case err, _ := <-watcher.Errors:
-			logging.Log.Errorf("Error watching", err)
+			change <- e.Name
 			return
+		}
+	case err, _ := <-watcher.Errors:
+		logging.Log.Errorf("Error watching", err)
+		return
 	}
 	return
 }
@@ -125,5 +123,3 @@ func initConfig() {
 		panic(fmt.Sprintf("Cannot load config %s %s", os.Args[1], err))
 	}
 }
-
-

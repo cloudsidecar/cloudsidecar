@@ -18,8 +18,8 @@ import (
 
 func TestGCSACLResponseToAWS(t *testing.T) {
 	aclRule := storage.ACLRule{
-		Email: "larry@barry.com",
-		Role: storage.RoleOwner,
+		Email:  "larry@barry.com",
+		Role:   storage.RoleOwner,
 		Entity: "abc123",
 	}
 	rules := []storage.ACLRule{aclRule}
@@ -38,7 +38,7 @@ func TestGCSACLResponseToAWS(t *testing.T) {
 func TestGCSAttrToHeaders(t *testing.T) {
 	utc, _ := time.LoadLocation("UTC")
 	attrs := &storage.ObjectAttrs{
-		Size: 123456,
+		Size:    123456,
 		Updated: time.Now(),
 	}
 	ctrl := gomock.NewController(t)
@@ -58,8 +58,8 @@ func TestGCSAttrToCombine(t *testing.T) {
 	hash := md5.Sum([]byte("meow"))
 	attrs := &storage.ObjectAttrs{
 		Bucket: "buckers",
-		MD5: hash[:],
-		Name: "myName",
+		MD5:    hash[:],
+		Name:   "myName",
 	}
 	output := GCSAttrToCombine(attrs)
 	assert.Equal(t, attrs.Bucket, *output.Bucket)
@@ -79,11 +79,11 @@ func TestGCSItemToContent(t *testing.T) {
 	updatedTime := time.Unix(1550463794, 0)
 	hash := md5.Sum([]byte("meow"))
 	item := &storage.ObjectAttrs{
-		Updated: updatedTime,
-		Size: 12345,
-		MD5: hash[:],
+		Updated:      updatedTime,
+		Size:         12345,
+		MD5:          hash[:],
 		StorageClass: "storage",
-		Name: "Key",
+		Name:         "Key",
 	}
 	output := GCSItemToContent(item)
 	assert.Equal(t, item.Size, output.Size)
@@ -97,14 +97,14 @@ func TestGCSListResponseObjectsToAWS(t *testing.T) {
 	prefix := ""
 	var keys int64 = 1234
 	req := &s3.ListObjectsInput{
-		Bucket: &bucket,
-		Prefix: &prefix,
+		Bucket:  &bucket,
+		Prefix:  &prefix,
 		MaxKeys: &keys,
 	}
 	contents := []*response_type.BucketContent{
 		{
-			Key: "cow",
-			Size: 12,
+			Key:          "cow",
+			Size:         12,
 			LastModified: "2019-02-18T04:23:14.000Z",
 		},
 	}
@@ -133,13 +133,13 @@ func TestGCSListResponseObjectsToAWS(t *testing.T) {
 
 	contents = []*response_type.BucketContent{
 		{
-			Key: "cow",
-			Size: 12,
+			Key:          "cow",
+			Size:         12,
 			LastModified: "2019-02-18T04:23:14.000Z",
 		},
 		{
-			Key: "now",
-			Size: 20,
+			Key:          "now",
+			Size:         20,
 			LastModified: "2019-02-19T04:23:14.000Z",
 		},
 	}

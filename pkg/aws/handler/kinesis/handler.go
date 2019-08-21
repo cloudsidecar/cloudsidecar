@@ -20,7 +20,6 @@ import (
 
 type KinesisHandler struct {
 	*Handler
-
 }
 
 const GcpShardId string = "shard-0"
@@ -113,7 +112,7 @@ func (handler *KinesisHandler) tryToDecrypt(topicName string, message []byte) ([
 	kvmKey := keyMap[topicName]
 	if kvmKey != "" {
 		req := &kms.DecryptRequest{
-			Name: kvmKey,
+			Name:       kvmKey,
 			Ciphertext: message,
 		}
 		resp, err := handler.GCPKMSClient.Decrypt(*handler.Context, req)
@@ -179,7 +178,7 @@ func (handler *KinesisHandler) GetRecordsHandle(writer http.ResponseWriter, requ
 			return
 		}
 		topicPieces := strings.Split(subscriptionInfo.Topic.ID(), "/")
-		topic := topicPieces[len(topicPieces) - 1]
+		topic := topicPieces[len(topicPieces)-1]
 		subscription.ReceiveSettings.MaxOutstandingMessages = int(maxCount)
 		subscription.ReceiveSettings.NumGoroutines = 1
 		subscription.ReceiveSettings.Synchronous = true
@@ -192,9 +191,9 @@ func (handler *KinesisHandler) GetRecordsHandle(writer http.ResponseWriter, requ
 				logging.Log.Debugf("Skipping message over max")
 			} else {
 				record := kinesis.Record{
-					PartitionKey: &gcpPartitionKey,
+					PartitionKey:   &gcpPartitionKey,
 					SequenceNumber: &message.ID,
-					Data: message.Data,
+					Data:           message.Data,
 				}
 				data, err := handler.tryToDecrypt(topic, message.Data)
 				if err != nil {
@@ -206,7 +205,7 @@ func (handler *KinesisHandler) GetRecordsHandle(writer http.ResponseWriter, requ
 				records[readCount] = record
 				message.Ack()
 			}
-			readCount ++
+			readCount++
 			if readCount >= maxCount {
 				logging.Log.Debugf("Canceling %d", readCount)
 				cancel()
@@ -218,14 +217,14 @@ func (handler *KinesisHandler) GetRecordsHandle(writer http.ResponseWriter, requ
 			readCount = maxCount
 		}
 		records = records[:readCount]
-		if err != nil  && !strings.Contains(err.Error(), "context canceled"){
+		if err != nil && !strings.Contains(err.Error(), "context canceled") {
 			writer.WriteHeader(400)
 			writer.Write([]byte(fmt.Sprint(err)))
 			return
 		}
 		output = &kinesis.GetRecordsOutput{
 			NextShardIterator: payload.ShardIterator,
-			Records: records,
+			Records:           records,
 		}
 	} else {
 		resp, err := handler.KinesisClient.GetRecordsRequest(payload).Send()
@@ -270,8 +269,8 @@ func (handler *KinesisHandler) GetShardIteratorHandle(writer http.ResponseWriter
 		ackDuration, _ := time.ParseDuration("1m")
 		retentionDuration, _ := time.ParseDuration("1d")
 		_, err := handler.GCPClient.CreateSubscription(*handler.Context, id, pubsub.SubscriptionConfig{
-			Topic: topic,
-			AckDeadline: ackDuration,
+			Topic:             topic,
+			AckDeadline:       ackDuration,
 			RetentionDuration: retentionDuration,
 		})
 		if err != nil {
@@ -328,25 +327,25 @@ func (handler *KinesisHandler) DescribeHandle(writer http.ResponseWriter, reques
 		endHashKey := "340282366920938463463374607431768211455"
 		hashRange := &kinesis.HashKeyRange{
 			StartingHashKey: &startHashKey,
-			EndingHashKey: &endHashKey,
+			EndingHashKey:   &endHashKey,
 		}
 		seqRange := &kinesis.SequenceNumberRange{
 			StartingSequenceNumber: &startHashKey,
 		}
 		shards := []kinesis.Shard{
 			{
-				ShardId: &gcpShardId,
-				HashKeyRange: hashRange,
+				ShardId:             &gcpShardId,
+				HashKeyRange:        hashRange,
 				SequenceNumberRange: seqRange,
 			},
 		}
 		output = &kinesis.DescribeStreamOutput{
 			StreamDescription: &kinesis.StreamDescription{
-				HasMoreShards: &falseValue,
+				HasMoreShards:        &falseValue,
 				RetentionPeriodHours: &retentionPeriod,
-				StreamName: payload.StreamName,
-				StreamStatus: kinesis.StreamStatusActive,
-				Shards: shards,
+				StreamName:           payload.StreamName,
+				StreamStatus:         kinesis.StreamStatusActive,
+				Shards:               shards,
 			},
 		}
 	} else {
@@ -446,7 +445,7 @@ func (handler *KinesisHandler) gcpPublish(topic GCPTopic, topicName string, mess
 	kvmKey := keyMap[topicName]
 	if kvmKey != "" {
 		req := &kms.EncryptRequest{
-			Name: kvmKey,
+			Name:      kvmKey,
 			Plaintext: message.Data,
 		}
 		resp, err := handler.GCPKMSClient.Encrypt(*handler.Context, req)
@@ -501,15 +500,15 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 			}
 			jsonOutput := response_type.KinesisResponse{
 				SequenceNumber: &response,
-				ShardId: &gcpShardId,
+				ShardId:        &gcpShardId,
 			}
 			json.NewEncoder(writer).Encode(jsonOutput)
 
 		} else {
 			req := handler.KinesisClient.PutRecordRequest(&kinesis.PutRecordInput{
-				Data: str,
+				Data:         str,
 				PartitionKey: &payload.PartitionKey,
-				StreamName: &payload.StreamName,
+				StreamName:   &payload.StreamName,
 			})
 			output, err := req.Send()
 			if err != nil {
@@ -520,7 +519,7 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 			}
 			jsonOutput := response_type.KinesisResponse{
 				SequenceNumber: output.SequenceNumber,
-				ShardId: output.ShardId,
+				ShardId:        output.ShardId,
 			}
 			json.NewEncoder(writer).Encode(jsonOutput)
 		}
@@ -543,8 +542,8 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 					return
 				}
 				results[i] = req
-				go func (i int, c <-chan struct{}) {
-					<- c
+				go func(i int, c <-chan struct{}) {
+					<-c
 					wg.Done()
 				}(i, results[i].Ready())
 			}
@@ -557,33 +556,33 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 					var errorCode = "ERROR"
 					var errorMessage = err.Error()
 					records[i] = response_type.KinesisResponse{
-						ErrorCode: &errorCode,
+						ErrorCode:    &errorCode,
 						ErrorMessage: &errorMessage,
 					}
 					failedCount += 1
 				} else {
 					records[i] = response_type.KinesisResponse{
-						ShardId: &gcpShardId,
+						ShardId:        &gcpShardId,
 						SequenceNumber: &serverId,
 					}
 				}
 			}
 			jsonOutput := response_type.KinesisRecordsResponse{
 				FailedRequestCount: failedCount,
-				Records: records,
+				Records:            records,
 			}
 			json.NewEncoder(writer).Encode(jsonOutput)
 
 		} else {
 			input := kinesis.PutRecordsInput{
 				StreamName: &payload.StreamName,
-				Records: make([]kinesis.PutRecordsRequestEntry, len(payload.Records)),
+				Records:    make([]kinesis.PutRecordsRequestEntry, len(payload.Records)),
 			}
 			for i, record := range payload.Records {
 				str, _ := base64.StdEncoding.DecodeString(record.Data)
 				key := record.PartitionKey
 				input.Records[i] = kinesis.PutRecordsRequestEntry{
-					Data: str,
+					Data:         str,
 					PartitionKey: &key,
 				}
 			}
@@ -597,7 +596,7 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 			}
 			jsonOutput := response_type.KinesisRecordsResponse{
 				FailedRequestCount: *output.FailedRecordCount,
-				Records: make([]response_type.KinesisResponse, len(output.Records)),
+				Records:            make([]response_type.KinesisResponse, len(output.Records)),
 			}
 			for i, record := range output.Records {
 				if record.ErrorCode != nil && *record.ErrorCode != "" {
@@ -608,7 +607,7 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 				} else {
 					jsonOutput.Records[i] = response_type.KinesisResponse{
 						SequenceNumber: record.SequenceNumber,
-						ShardId: record.ShardId,
+						ShardId:        record.ShardId,
 					}
 				}
 			}

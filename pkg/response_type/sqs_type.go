@@ -4,26 +4,26 @@ import "encoding/xml"
 
 const (
 	XmlHeader string = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-	XmlNs string = "http://www.w3.org/2001/XMLSchema-instance"
+	XmlNs     string = "http://www.w3.org/2001/XMLSchema-instance"
 )
 
 type SqsErrorResponse struct {
 	// <?xml version="1.0"?><ErrorResponse xmlns="http://queue.amazonaws.com/doc/2012-11-05/"><Error><Type>Sender</Type><Code>AccessDenied</Code><Message>Access to the resource https://queue.amazonaws.com/ is denied.</Message><Detail/></Error><RequestId>be0bc434-dd62-5a29-bb07-91a3a84796c2</RequestId></ErrorResponse>
-	XMLName xml.Name `xml:"ErrorResponse"`
-	XmlNS string `xml:"xmlns,attr"`
-	Error *SqsError `xml:"Error"`
-	RequestId *string `xml:"RequestId"`
+	XMLName   xml.Name  `xml:"ErrorResponse"`
+	XmlNS     string    `xml:"xmlns,attr"`
+	Error     *SqsError `xml:"Error"`
+	RequestId *string   `xml:"RequestId"`
 }
 
 type SqsError struct {
-	Type string `xml:"Type"`
-	Code string `xml:"Code"`
+	Type    string `xml:"Type"`
+	Code    string `xml:"Code"`
 	Message string `xml:"Message"`
 }
 
 type ListQueuesResponse struct {
-	XMLName xml.Name `xml:"ListQueuesResponse"`
-	XmlNS string `xml:"xmlns,attr"`
+	XMLName          xml.Name  `xml:"ListQueuesResponse"`
+	XmlNS            string    `xml:"xmlns,attr"`
 	ListQueuesResult QueueUrls `xml:"ListQueuesResult"`
 }
 
@@ -32,8 +32,8 @@ type QueueUrls struct {
 }
 
 type CreateQueueResponse struct {
-	XMLName xml.Name `xml:"CreateQueueResponse"`
-	XmlNS string `xml:"xmlns,attr"`
+	XMLName           xml.Name  `xml:"CreateQueueResponse"`
+	XmlNS             string    `xml:"xmlns,attr"`
 	CreateQueueResult QueueUrls `xml:"CreateQueueResult"`
 }
 
@@ -46,20 +46,20 @@ type DeleteQueueResponse struct {
 }
 
 type SendMessageResponse struct {
-	XMLName xml.Name `xml:"SendMessageResponse"`
-	XmlNS string `xml:"xmlns,attr"`
+	XMLName           xml.Name          `xml:"SendMessageResponse"`
+	XmlNS             string            `xml:"xmlns,attr"`
 	SendMessageResult SendMessageResult `xml:"SendMessageResult"`
 }
 
 type SendMessageResult struct {
-	MD5OfMessageBody *string `xml:"MD5OfMessageBody"`
+	MD5OfMessageBody       *string `xml:"MD5OfMessageBody"`
 	MD5OfMessageAttributes *string `xml:"MD5OfMessageAttributes"`
-	MessageId *string `xml:"MessageId"`
+	MessageId              *string `xml:"MessageId"`
 }
 
 type ReceiveMessageResponse struct {
-	XMLName xml.Name `xml:"ReceiveMessageResponse"`
-	XmlNS string `xml:"xmlns,attr"`
+	XMLName              xml.Name             `xml:"ReceiveMessageResponse"`
+	XmlNS                string               `xml:"xmlns,attr"`
 	ReceiveMessageResult ReceiveMessageResult `xml:"ReceiveMessageResult"`
 }
 
@@ -68,15 +68,15 @@ type ReceiveMessageResult struct {
 }
 
 type SqsMessage struct {
-	MessageId *string `xml:"MessageId"`
-	ReceiptHandle *string `xml:"ReceiptHandle"`
-	MD5OfBody *string `xml:"MD5OfBody"`
-	Body *string `xml:"Body"`
-	Attributes []SqsAttribute `xml:"Attribute"`
+	MessageId     *string        `xml:"MessageId"`
+	ReceiptHandle *string        `xml:"ReceiptHandle"`
+	MD5OfBody     *string        `xml:"MD5OfBody"`
+	Body          *string        `xml:"Body"`
+	Attributes    []SqsAttribute `xml:"Attribute"`
 }
 
 type SqsAttribute struct {
-	Name string `xml:"Name"`
+	Name  string `xml:"Name"`
 	Value string `xml:"Value"`
 }
 
@@ -85,7 +85,7 @@ type DeleteMessageResponse struct {
 }
 
 type DeleteMessageBatchResponse struct {
-	XMLName xml.Name `xml:"DeleteMessageBatchResponse"`
+	XMLName                  xml.Name                 `xml:"DeleteMessageBatchResponse"`
 	DeleteMessageBatchResult DeleteMessageBatchResult `xml:"DeleteMessageBatchResult"`
 }
 
@@ -98,7 +98,7 @@ type DeleteMessageBatchResultEntry struct {
 }
 
 type SendMessageBatchResponse struct {
-	XMLName xml.Name `xml:"SendMessageBatchResponse"`
+	XMLName                xml.Name               `xml:"SendMessageBatchResponse"`
 	SendMessageBatchResult SendMessageBatchResult `xml:"SendMessageBatchResult"`
 }
 
@@ -107,8 +107,8 @@ type SendMessageBatchResult struct {
 }
 
 type SendMessageBatchResultEntry struct {
-	Id *string `xml:"Id"`
-	MessageId *string `xml:"MessageId"`
-	MD5OfMessageBody *string `xml:"MD5OfMessageBody"`
+	Id                     *string `xml:"Id"`
+	MessageId              *string `xml:"MessageId"`
+	MD5OfMessageBody       *string `xml:"MD5OfMessageBody"`
 	MD5OfMessageAttributes *string `xml:"MD5OfMessageAttributes"`
 }

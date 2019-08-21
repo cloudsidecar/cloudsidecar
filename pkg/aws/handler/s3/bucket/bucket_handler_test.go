@@ -2,19 +2,19 @@ package bucket
 
 import (
 	"cloud.google.com/go/storage"
+	s3_handler "cloudsidecar/pkg/aws/handler/s3"
+	"cloudsidecar/pkg/mock"
 	"context"
 	"fmt"
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
 	"net/http"
 	"net/url"
-	s3_handler "cloudsidecar/pkg/aws/handler/s3"
-	"cloudsidecar/pkg/mock"
 	"testing"
 )
 
 func TestHandler_ACLParseInput(t *testing.T) {
-	valueMap := map[string]string {"bucket": "boops"}
+	valueMap := map[string]string{"bucket": "boops"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
 	req := &http.Request{
 		URL: testUrl,
@@ -49,10 +49,8 @@ func TestHandler_ACLHandle(t *testing.T) {
 	req := &http.Request{
 		URL: testUrl,
 	}
-	aclHandle := storage.ACLHandle{
-
-	}
-	valueMap := map[string]string {"bucket": "boops"}
+	aclHandle := storage.ACLHandle{}
+	valueMap := map[string]string{"bucket": "boops"}
 	req = mux.SetURLVars(req, valueMap)
 	bucketMock.EXPECT().ACL().Return(&aclHandle)
 	defer recoverFail()
@@ -60,7 +58,7 @@ func TestHandler_ACLHandle(t *testing.T) {
 }
 
 func TestHandler_ListParseInput(t *testing.T) {
-	valueMap := map[string]string {"bucket": "boops"}
+	valueMap := map[string]string{"bucket": "boops"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
 	req := &http.Request{
 		URL: testUrl,
@@ -94,8 +92,7 @@ func TestHandler_ListHandle_NoBucket(t *testing.T) {
 		},
 	}
 	handler := New(s3Handler)
-	request := &http.Request{
-	}
+	request := &http.Request{}
 	writerMock.EXPECT().WriteHeader(400)
 	writerMock.EXPECT().Write([]byte("no bucket present"))
 	handler.ListHandlev2(writerMock, request)
@@ -117,35 +114,30 @@ func TestHandler_ListHandle_Success(t *testing.T) {
 			return bucketMock
 		},
 		Context: &ctx,
-
 	}
 	handler := New(s3Handler)
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
 	req := &http.Request{
 		URL: testUrl,
 	}
-	valueMap := map[string]string {"bucket": "boops"}
+	valueMap := map[string]string{"bucket": "boops"}
 	req = mux.SetURLVars(req, valueMap)
-	it := storage.ObjectIterator{
-
-	}
+	it := storage.ObjectIterator{}
 	bucketMock.EXPECT().Objects(ctx, &storage.Query{
 		Delimiter: "/",
-		Prefix: "boo",
-		Versions: false,
+		Prefix:    "boo",
+		Versions:  false,
 	}).Return(&it)
 	listHandlerRecover(handler, writerMock, req)
 }
 
-func listHandlerRecover(handler *Handler, w http.ResponseWriter, r *http.Request){
+func listHandlerRecover(handler *Handler, w http.ResponseWriter, r *http.Request) {
 	defer recoverFail()
 	handler.ListHandlev2(w, r)
 }
 
 func recoverFail() {
-	if r := recover(); r!= nil {
+	if r := recover(); r != nil {
 		fmt.Println("recovered from ", r)
 	}
 }
-
-

@@ -5,10 +5,10 @@
 package mock
 
 import (
-	x "net/http"
 	bufio "bufio"
 	gomock "github.com/golang/mock/gomock"
 	net "net"
+	x "net/http"
 	reflect "reflect"
 )
 

@@ -1,9 +1,9 @@
 package object
 
 import (
+	"cloudsidecar/pkg/logging"
 	"errors"
 	"io"
-	"cloudsidecar/pkg/logging"
 	"strconv"
 	"strings"
 )

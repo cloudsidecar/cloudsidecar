@@ -3,6 +3,8 @@ package object
 import (
 	"bytes"
 	"cloud.google.com/go/storage"
+	s3_handler "cloudsidecar/pkg/aws/handler/s3"
+	"cloudsidecar/pkg/mock"
 	"context"
 	"fmt"
 	"github.com/golang/mock/gomock"
@@ -11,15 +13,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	s3_handler "cloudsidecar/pkg/aws/handler/s3"
-	"cloudsidecar/pkg/mock"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestHandler_PutParseInputChunked(t *testing.T) {
-	valueMap := map[string]string {"bucket": "boops", "key" : "mykey"}
+	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
 	bodyString := fmt.Sprintf(
 		"%s\r\n%s\r\n%s\r\n%s\r\n%s\r\n",
@@ -28,11 +28,11 @@ func TestHandler_PutParseInputChunked(t *testing.T) {
 		"5;chink-signature=mooo",
 		"12345",
 		"0;chunk-signature=nope",
-		)
+	)
 	body := ioutil.NopCloser(bytes.NewReader([]byte(bodyString)))
 	req := &http.Request{
-		URL: testUrl,
-		Body: body,
+		URL:    testUrl,
+		Body:   body,
 		Header: make(http.Header),
 	}
 	req = mux.SetURLVars(req, valueMap)
@@ -45,12 +45,12 @@ func TestHandler_PutParseInputChunked(t *testing.T) {
 }
 
 func TestHandler_PutParseInput(t *testing.T) {
-	valueMap := map[string]string {"bucket": "boops", "key" : "mykey"}
+	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
 	body := ioutil.NopCloser(bytes.NewReader([]byte("enjoy my body")))
 	req := &http.Request{
-		URL: testUrl,
-		Body: body,
+		URL:    testUrl,
+		Body:   body,
 		Header: make(http.Header),
 	}
 	req = mux.SetURLVars(req, valueMap)
@@ -89,7 +89,7 @@ func todo_TestHandler_GetHandle(t *testing.T) {
 		},
 		Context: &ctx,
 	}
-	valueMap := map[string]string {"bucket": "boops", "key" : "mykey"}
+	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/boops/mykey")
 	req := &http.Request{
 		URL: testUrl,
@@ -97,8 +97,8 @@ func todo_TestHandler_GetHandle(t *testing.T) {
 	req = mux.SetURLVars(req, valueMap)
 	attrs := &storage.ObjectAttrs{
 		Bucket: "boops",
-		Name: "mykey",
-		Size: 123,
+		Name:   "mykey",
+		Size:   123,
 	}
 	fakeReader := strings.NewReader("this is my file")
 	objectMock.EXPECT().Attrs(ctx).Return(attrs, nil)
@@ -108,7 +108,7 @@ func todo_TestHandler_GetHandle(t *testing.T) {
 }
 
 func TestHandler_GetParseInput(t *testing.T) {
-	valueMap := map[string]string {"bucket": "boops", "key" : "mykey"}
+	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
 	req := &http.Request{
 		URL: testUrl,
@@ -144,9 +144,8 @@ func TestHandler_HeadHandle(t *testing.T) {
 			return objectMock
 		},
 		Context: &ctx,
-
 	}
-	valueMap := map[string]string {"bucket": "boops", "key" : "mykey"}
+	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
 	req := &http.Request{
 		URL: testUrl,
@@ -154,9 +153,9 @@ func TestHandler_HeadHandle(t *testing.T) {
 	req = mux.SetURLVars(req, valueMap)
 	updatedTime := time.Unix(1550463794, 0)
 	attrs := &storage.ObjectAttrs{
-		Bucket: "boops",
-		Name: "mykey",
-		Size: 123,
+		Bucket:  "boops",
+		Name:    "mykey",
+		Size:    123,
 		Updated: updatedTime,
 	}
 	outputMap := make(http.Header)
@@ -170,7 +169,7 @@ func TestHandler_HeadHandle(t *testing.T) {
 }
 
 func TestHandler_HeadParseInput(t *testing.T) {
-	valueMap := map[string]string {"bucket": "boops", "key" : "mykey"}
+	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
 	req := &http.Request{
 		URL: testUrl,

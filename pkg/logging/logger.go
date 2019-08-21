@@ -1,11 +1,11 @@
 package logging
 
 import (
+	conf "cloudsidecar/pkg/config"
 	"fmt"
 	"github.com/op/go-logging"
 	"github.com/spf13/viper"
 	"os"
-	conf "cloudsidecar/pkg/config"
 	"strings"
 )
 
@@ -15,7 +15,7 @@ func Init(pattern string, level string) {
 	if pattern == "" {
 		pattern = `%{color}%{time:2006-01-02T15:04:05.999Z-07:00} %{shortfile} > %{level:.4s}%{color:reset}:  %{message}`
 	}
-	var format = logging.MustStringFormatter(pattern, )
+	var format = logging.MustStringFormatter(pattern)
 	var backend = logging.NewLogBackend(os.Stdout, "", 0)
 	var backendFormatter = logging.NewBackendFormatter(backend, format)
 	var backendLeveled = logging.AddModuleLevel(backendFormatter)
@@ -52,4 +52,3 @@ func LoadConfig(config *conf.Config) {
 	}
 	Init(format, level)
 }
-
