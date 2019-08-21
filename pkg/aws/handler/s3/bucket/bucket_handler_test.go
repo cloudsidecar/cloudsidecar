@@ -50,7 +50,7 @@ func TestHandler_ACLHandle(t *testing.T) {
 			return bucketMock
 		},
 		Context: &ctx,
-		Config: getConfig(),
+		Config:  getConfig(),
 	}
 	handler := New(s3Handler)
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
@@ -122,7 +122,7 @@ func TestHandler_ListHandle_Success(t *testing.T) {
 			return bucketMock
 		},
 		Context: &ctx,
-		Config: getConfig(),
+		Config:  getConfig(),
 	}
 	handler := New(s3Handler)
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")

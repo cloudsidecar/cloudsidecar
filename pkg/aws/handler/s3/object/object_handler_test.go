@@ -95,7 +95,7 @@ func todo_TestHandler_GetHandle(t *testing.T) {
 			return objectMock
 		},
 		Context: &ctx,
-		Config: getConfig(),
+		Config:  getConfig(),
 	}
 	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/boops/mykey")
@@ -152,7 +152,7 @@ func TestHandler_HeadHandle(t *testing.T) {
 			return objectMock
 		},
 		Context: &ctx,
-		Config: getConfig(),
+		Config:  getConfig(),
 	}
 	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")

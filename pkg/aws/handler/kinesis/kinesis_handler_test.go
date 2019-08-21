@@ -50,7 +50,7 @@ func TestKinesisHandler_CreateStreamHandle(t *testing.T) {
 		&Handler{
 			GCPClient: mockGcpClient,
 			Context:   &ctx,
-			Config: getConfig(),
+			Config:    getConfig(),
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
@@ -90,7 +90,7 @@ func TestKinesisHandler_DeleteStreamHandle(t *testing.T) {
 				return mockGcpTopic
 			},
 			Context: &ctx,
-			Config: getConfig(),
+			Config:  getConfig(),
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
@@ -130,7 +130,7 @@ func TestKinesisHandler_DescribeHandle(t *testing.T) {
 				return mockGcpTopic
 			},
 			Context: &ctx,
-			Config: getConfig(),
+			Config:  getConfig(),
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
@@ -166,7 +166,7 @@ func TestKinesisHandler_StartStreamEncryptionHandle(t *testing.T) {
 		&Handler{
 			GCPClient: mockGcpClient,
 			Context:   &ctx,
-			Config: getConfig(),
+			Config:    getConfig(),
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
@@ -218,7 +218,7 @@ func TestKinesisHandler_PublishHandle(t *testing.T) {
 				return mockGcpPublishResult
 			},
 			Context: &ctx,
-			Config: getConfig(),
+			Config:  getConfig(),
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
