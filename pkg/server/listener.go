@@ -21,7 +21,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -35,7 +34,7 @@ import (
 	"time"
 )
 
-const Version = "0.0.12"
+const Version = "0.0.13"
 
 // Creates an http client for GCP.  This is needed so we can set timeouts and not
 // share http/2 connections between gcp uses, which helps with GCS
@@ -130,25 +129,28 @@ func getMiddlewares(enterpriseSystem enterprise.Enterprise, config *conf.Config)
 }
 
 // Main function, runs http server
-func Main(cmd *cobra.Command, args []string) {
-	var config conf.Config
+func Main(config *conf.Config, onConfigChange <-chan string, cmd *cobra.Command, args []string) {
 	var serverWaitGroup sync.WaitGroup
 	var enterpriseSystem enterprise.Enterprise
 	awsHandlers := make(map[string]awshandler.HandlerInterface)
 	enterprise.RegisterType(reflect.TypeOf(enterprise.Noop{}))
 	enterpriseSystem = enterprise.GetSingleton()
 	// set up logger and config reloader
-	logging.LoadConfig(&config)
-	viper.WatchConfig()
-	viper.OnConfigChange(func(e fsnotify.Event) {
-		logging.Log.Debug("Config file changed:", e.Name)
-		logging.LoadConfig(&config)
-		for key, handler := range awsHandlers {
-			handler.SetConfig(viper.Sub(fmt.Sprint("aws_configs.", key)))
+	logging.LoadConfig(config)
+	go func() {
+		for {
+			select {
+				case e := <- onConfigChange:
+					logging.Log.Debug("Config file changed:", e)
+					logging.LoadConfig(config)
+					for key, handler := range awsHandlers {
+						handler.SetConfig(viper.Sub(fmt.Sprint("aws_configs.", key)))
+					}
+			}
 		}
-	})
+	}()
 	logging.Log.Infof("Started %s.. ", Version)
-	middlewares := getMiddlewares(enterpriseSystem, &config)
+	middlewares := getMiddlewares(enterpriseSystem, config)
 	// for each configured aws config, we want to set up an http listener
 	for key, awsConfig := range config.AwsConfigs  {
 		toListen := true
