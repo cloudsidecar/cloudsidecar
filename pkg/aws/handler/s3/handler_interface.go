@@ -27,7 +27,6 @@ type Handler struct {
 	gcpClientPoolLock sync.Mutex
 }
 
-
 type GCPClient interface {
 	Bucket(name string) *storage.BucketHandle
 	Close() error
@@ -159,13 +158,13 @@ func (handler *Handler) GetGCPClient(key string) (GCPClient, error) {
 	}
 	return handler.GCPClient()
 }
-func (handler *Handler) GetContext() *context.Context{
+func (handler *Handler) GetContext() *context.Context {
 	return handler.Context
 }
 func (handler *Handler) GetConfig() *viper.Viper {
 	return handler.Config
 }
-func (handler *Handler) SetS3Client(s3Client s3iface.S3API){
+func (handler *Handler) SetS3Client(s3Client s3iface.S3API) {
 	handler.S3Client = s3Client
 }
 func (handler *Handler) SetContext(context *context.Context) {
@@ -178,7 +177,7 @@ func (handler *Handler) SetConfig(config *viper.Viper) {
 func (handler *Handler) BucketRename(bucket string) string {
 	if handler.Config != nil {
 		renameMap := handler.Config.GetStringMapString("gcp_destination_config.gcs_config.bucket_rename")
-		bucket = strings.Replace(bucket, ".",  "__dot__",  -1)
+		bucket = strings.Replace(bucket, ".", "__dot__", -1)
 		if renameMap != nil {
 			if val, ok := renameMap[bucket]; ok {
 				return val
@@ -193,4 +192,3 @@ func (handler *Handler) BucketRename(bucket string) string {
 const (
 	XmlHeader string = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
 )
-

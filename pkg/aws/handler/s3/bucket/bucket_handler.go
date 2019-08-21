@@ -4,20 +4,19 @@ package bucket
 
 import (
 	"cloud.google.com/go/storage"
+	s3_handler "cloudsidecar/pkg/aws/handler/s3"
+	"cloudsidecar/pkg/converter"
+	"cloudsidecar/pkg/logging"
+	"cloudsidecar/pkg/response_type"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/mux"
 	"net/http"
-	s3_handler "cloudsidecar/pkg/aws/handler/s3"
-	"cloudsidecar/pkg/converter"
-	"cloudsidecar/pkg/logging"
-	"cloudsidecar/pkg/response_type"
 	"strconv"
 	"strings"
 )
-
 
 type Handler struct {
 	*s3_handler.Handler
@@ -42,7 +41,7 @@ func New(s3Handler *s3_handler.Handler) *Handler {
 // Register HTTP patterns to functions
 func (wrapper *Handler) Register(mux *mux.Router) {
 	keyFromUrl := wrapper.Config.Get("gcp_destination_config.key_from_url")
-	if keyFromUrl != nil && keyFromUrl == true{
+	if keyFromUrl != nil && keyFromUrl == true {
 		mux.HandleFunc("/{creds}/{bucket}", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
 		mux.HandleFunc("/{creds}/{bucket}/", wrapper.ACLHandle).Queries("acl", "").Methods("GET")
 		mux.HandleFunc("/{creds}/{bucket}", wrapper.ListHandlev2).Queries("list-type", "2").Methods("GET")
@@ -119,8 +118,8 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 		bucketObject := wrapper.GCPClientToBucket(bucket, client)
 		it := bucketObject.Objects(*wrapper.Context, &storage.Query{
 			Delimiter: *input.Delimiter,
-			Prefix: *input.Prefix,
-			Versions: false,
+			Prefix:    *input.Prefix,
+			Versions:  false,
 		})
 		response, err = converter.GCSListResponseToAWS(it, input, pageSize)
 		if err != nil {
@@ -138,7 +137,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 			writer.WriteHeader(400)
 			writer.Write([]byte(fmt.Sprint(err)))
 		}
-		var contents= make([]*response_type.BucketContent, len(resp.Contents))
+		var contents = make([]*response_type.BucketContent, len(resp.Contents))
 		for i, content := range resp.Contents {
 			contents[i] = &response_type.BucketContent{
 				Key:          *content.Key,
@@ -148,7 +147,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 				StorageClass: string(content.StorageClass),
 			}
 		}
-		var prefixes= make([]*response_type.BucketCommonPrefix, len(resp.CommonPrefixes))
+		var prefixes = make([]*response_type.BucketCommonPrefix, len(resp.CommonPrefixes))
 		for i, prefix := range resp.CommonPrefixes {
 			prefixes[i] = &response_type.BucketCommonPrefix{
 				Prefix: *prefix.Prefix,
@@ -239,8 +238,8 @@ func (wrapper *Handler) ListHandlev2(writer http.ResponseWriter, request *http.R
 		bucketObject := wrapper.GCPClientToBucket(bucket, client)
 		it := bucketObject.Objects(*wrapper.Context, &storage.Query{
 			Delimiter: *input.Delimiter,
-			Prefix: *input.Prefix,
-			Versions: false,
+			Prefix:    *input.Prefix,
+			Versions:  false,
 		})
 		response, err = converter.GCSListResponseToAWSv2(it, input, pageSize)
 		if err != nil {
@@ -258,7 +257,7 @@ func (wrapper *Handler) ListHandlev2(writer http.ResponseWriter, request *http.R
 			writer.WriteHeader(400)
 			writer.Write([]byte(fmt.Sprint(err)))
 		}
-		var contents= make([]*response_type.BucketContent, len(resp.Contents))
+		var contents = make([]*response_type.BucketContent, len(resp.Contents))
 		for i, content := range resp.Contents {
 			contents[i] = &response_type.BucketContent{
 				Key:          *content.Key,
@@ -268,7 +267,7 @@ func (wrapper *Handler) ListHandlev2(writer http.ResponseWriter, request *http.R
 				StorageClass: string(content.StorageClass),
 			}
 		}
-		var prefixes= make([]*response_type.BucketCommonPrefix, len(resp.CommonPrefixes))
+		var prefixes = make([]*response_type.BucketCommonPrefix, len(resp.CommonPrefixes))
 		for i, prefix := range resp.CommonPrefixes {
 			prefixes[i] = &response_type.BucketCommonPrefix{
 				Prefix: *prefix.Prefix,
@@ -295,7 +294,6 @@ func (wrapper *Handler) ListHandlev2(writer http.ResponseWriter, request *http.R
 	writer.Write([]byte(s3_handler.XmlHeader))
 	writer.Write([]byte(string(output)))
 }
-
 
 // Parse input for ACL request
 func (wrapper *Handler) ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, error) {
@@ -331,7 +329,7 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 				code := "AccessDenied"
 				message := "Access Denied"
 				xmlResponse := response_type.AWSACLResponseError{
-					Code: &code,
+					Code:    &code,
 					Message: &message,
 				}
 				writer.WriteHeader(403)
@@ -357,16 +355,16 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 		for i, grant := range resp.Grants {
 			grants[i] = &response_type.Grant{
 				Grantee: &response_type.Grantee{
-					Id: *grant.Grantee.ID,
+					Id:          *grant.Grantee.ID,
 					DisplayName: *grant.Grantee.DisplayName,
-					XmlNS: response_type.ACLXmlNs,
-					Xsi: response_type.ACLXmlXsi,
+					XmlNS:       response_type.ACLXmlNs,
+					Xsi:         response_type.ACLXmlXsi,
 				},
 				Permission: string(grant.Permission),
 			}
 		}
 		s3Resp := &response_type.AWSACLResponse{
-			OwnerId: *resp.Owner.ID,
+			OwnerId:          *resp.Owner.ID,
 			OwnerDisplayName: *resp.Owner.DisplayName,
 			AccessControlList: &response_type.AccessControlList{
 				Grants: grants,

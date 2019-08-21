@@ -38,7 +38,7 @@ const Version = "0.0.13"
 
 // Creates an http client for GCP.  This is needed so we can set timeouts and not
 // share http/2 connections between gcp uses, which helps with GCS
-func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.Client {
+func httpClientForGCP(ctx context.Context, opts ...option.ClientOption) *http.Client {
 	roundTrip := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
@@ -50,8 +50,8 @@ func httpClientForGCP(ctx context.Context, opts ... option.ClientOption) *http.C
 		IdleConnTimeout:       5 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		MaxIdleConnsPerHost: 1,
-		MaxConnsPerHost: 1,
+		MaxIdleConnsPerHost:   1,
+		MaxConnsPerHost:       1,
 	}
 	// This is from the SDK
 	userAgent := "gcloud-golang-storage/20151204"
@@ -103,8 +103,8 @@ func loggingMiddleware(next http.Handler) http.Handler {
 }
 
 // Gets all middlewares configured.  Looks in plugin/middleware/ for so files
-func getMiddlewares(enterpriseSystem enterprise.Enterprise, config *conf.Config) map[string]func (http.Handler) http.Handler {
-	results := make(map[string]func (http.Handler) http.Handler)
+func getMiddlewares(enterpriseSystem enterprise.Enterprise, config *conf.Config) map[string]func(http.Handler) http.Handler {
+	results := make(map[string]func(http.Handler) http.Handler)
 	enterpriseMiddlewares := enterpriseSystem.RegisterMiddlewares()
 
 	for key, middleware := range config.Middleware {
@@ -119,7 +119,7 @@ func getMiddlewares(enterpriseSystem enterprise.Enterprise, config *conf.Config)
 				if symErr != nil {
 					logging.Log.Error("Cannot call register from middleware", middleware.Type, " ", symErr)
 				} else {
-					registerFunc := sym.(func (config *viper.Viper) func(http.Handler) http.Handler)
+					registerFunc := sym.(func(config *viper.Viper) func(http.Handler) http.Handler)
 					results[key] = registerFunc(viper.Sub(fmt.Sprint("middleware.", key)))
 				}
 			}
@@ -140,25 +140,25 @@ func Main(config *conf.Config, onConfigChange <-chan string, cmd *cobra.Command,
 	go func() {
 		for {
 			select {
-				case e := <- onConfigChange:
-					logging.Log.Debug("Config file changed:", e)
-					logging.LoadConfig(config)
-					for key, handler := range awsHandlers {
-						handler.SetConfig(viper.Sub(fmt.Sprint("aws_configs.", key)))
-					}
+			case e := <-onConfigChange:
+				logging.Log.Debug("Config file changed:", e)
+				logging.LoadConfig(config)
+				for key, handler := range awsHandlers {
+					handler.SetConfig(viper.Sub(fmt.Sprint("aws_configs.", key)))
+				}
 			}
 		}
 	}()
 	logging.Log.Infof("Started %s.. ", Version)
 	middlewares := getMiddlewares(enterpriseSystem, config)
 	// for each configured aws config, we want to set up an http listener
-	for key, awsConfig := range config.AwsConfigs  {
+	for key, awsConfig := range config.AwsConfigs {
 		toListen := true
 		port := awsConfig.Port
 		r := mux.NewRouter()
 		r.Use(loggingMiddleware)
 		configs := defaults.Config()
-		creds := aws.NewStaticCredentialsProvider(awsConfig.DestinationAWSConfig.AccessKeyId, awsConfig.DestinationAWSConfig.SecretAccessKey, "" )
+		creds := aws.NewStaticCredentialsProvider(awsConfig.DestinationAWSConfig.AccessKeyId, awsConfig.DestinationAWSConfig.SecretAccessKey, "")
 		configs.Credentials = creds
 		configs.Region = endpoints.UsEast1RegionID
 		ctx := context.Background()
@@ -174,7 +174,7 @@ func Main(config *conf.Config, onConfigChange <-chan string, cmd *cobra.Command,
 			// set up generic handler for s3
 			handler := s3handler.Handler{
 				S3Client: svc,
-				Config: viper.Sub(fmt.Sprint("aws_configs.", key)),
+				Config:   viper.Sub(fmt.Sprint("aws_configs.", key)),
 				GCPClientToBucket: func(bucket string, client s3handler.GCPClient) s3handler.GCPBucket {
 					return client.Bucket(bucket)
 				},
@@ -182,12 +182,12 @@ func Main(config *conf.Config, onConfigChange <-chan string, cmd *cobra.Command,
 					return bucket.Object(name)
 				},
 				GCPClientPerKey: make(map[string]s3handler.GCPClient),
-				GCPClientPool: make(map[string][]s3handler.GCPClient),
+				GCPClientPool:   make(map[string][]s3handler.GCPClient),
 			}
 			if awsConfig.DestinationGCPConfig != nil {
 				// use GCS
 				var gcpClient func() (s3handler.GCPClient, error)
-				if awsConfig.DestinationGCPConfig.KeyFileLocation != nil{
+				if awsConfig.DestinationGCPConfig.KeyFileLocation != nil {
 					credInput := *awsConfig.DestinationGCPConfig.KeyFileLocation
 					gcpClient = func() (s3handler.GCPClient, error) {
 						return newGCPStorage(ctx, credInput)
@@ -248,7 +248,7 @@ func Main(config *conf.Config, onConfigChange <-chan string, cmd *cobra.Command,
 			svc := sqs.New(configs)
 			handler := csSqs.Handler{
 				SqsClient: svc,
-				Config:        viper.Sub(fmt.Sprint("aws_configs.", key)),
+				Config:    viper.Sub(fmt.Sprint("aws_configs.", key)),
 				GCPClientToTopic: func(topic string, client kinesishandler.GCPClient) kinesishandler.GCPTopic {
 					return client.Topic(topic)
 				},
@@ -279,7 +279,7 @@ func Main(config *conf.Config, onConfigChange <-chan string, cmd *cobra.Command,
 			handler.Register(r)
 		} else if awsConfig.ServiceType == "" {
 			logging.Log.Error("No service type configured for port ", awsConfig.Port)
-		} else if enterpriseSystem.RegisterHandler(awsConfig, r, serverWaitGroup){
+		} else if enterpriseSystem.RegisterHandler(awsConfig, r, serverWaitGroup) {
 			toListen = false
 			// do nothing, enterprise got this
 		} else {
@@ -311,7 +311,7 @@ func Main(config *conf.Config, onConfigChange <-chan string, cmd *cobra.Command,
 				Handler: r,
 				Addr:    fmt.Sprintf("127.0.0.1:%d", port),
 			}
-			go func(){
+			go func() {
 				logging.Log.Error("", srv.ListenAndServe())
 				serverWaitGroup.Done()
 			}()

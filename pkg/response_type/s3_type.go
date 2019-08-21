@@ -5,25 +5,25 @@ import (
 	"encoding/xml"
 	"reflect"
 )
+
 const (
-	ACLXmlNs string = "http://www.w3.org/2001/XMLSchema-instance"
+	ACLXmlNs  string = "http://www.w3.org/2001/XMLSchema-instance"
 	ACLXmlXsi string = "CanonicalUser"
 )
 
 type Map map[string]interface{}
 
-
 func (m Map) Load(c []datastore.Property) error {
 	for _, p := range c {
 		if reflect.ValueOf(p.Value).Kind() == reflect.Ptr {
-			ptr := p.Value.(* datastore.Entity)
+			ptr := p.Value.(*datastore.Entity)
 			deref := *ptr
 			mapValue := make(Map)
-			for _, prop := range deref.Properties{
+			for _, prop := range deref.Properties {
 				mapValue[prop.Name] = prop.Value
 			}
 			m[p.Name] = mapValue
-		} else{
+		} else {
 			m[p.Name] = p.Value
 		}
 	}
@@ -34,8 +34,8 @@ func (m Map) Save() ([]datastore.Property, error) {
 	props := make([]datastore.Property, len(m))
 	i := 0
 	for k, v := range m {
-		props[i] = datastore.Property {
-			Name: k,
+		props[i] = datastore.Property{
+			Name:  k,
 			Value: v,
 		}
 		i++
@@ -44,34 +44,33 @@ func (m Map) Save() ([]datastore.Property, error) {
 }
 
 type KinesisRequest struct {
-	StreamName string
+	StreamName   string
 	PartitionKey string
-	Data string
-	Records []KinesisRecordsRequest
+	Data         string
+	Records      []KinesisRecordsRequest
 }
 
 type KinesisResponse struct {
 	SequenceNumber *string
-	ShardId *string
-	ErrorCode *string
-	ErrorMessage *string
+	ShardId        *string
+	ErrorCode      *string
+	ErrorMessage   *string
 }
 
 type KinesisRecordsRequest struct {
 	PartitionKey string
-	Data string
+	Data         string
 }
 
 type KinesisRecordsResponse struct {
 	FailedRequestCount int64
-	Records []KinesisResponse
-
+	Records            []KinesisResponse
 }
 
 type AWSACLResponse struct {
-	XMLName xml.Name `xml:"AccessControlPolicy"`
-	OwnerId string `xml:"Owner>ID"`
-	OwnerDisplayName string `xml:"Owner>DisplayName"`
+	XMLName           xml.Name           `xml:"AccessControlPolicy"`
+	OwnerId           string             `xml:"Owner>ID"`
+	OwnerDisplayName  string             `xml:"Owner>DisplayName"`
 	AccessControlList *AccessControlList `xml:"AccessControlList"`
 }
 
@@ -80,39 +79,39 @@ type AccessControlList struct {
 }
 
 type Grant struct {
-	Grantee *Grantee `xml:"Grantee"`
-	Permission string `xml:"Permission"`
+	Grantee    *Grantee `xml:"Grantee"`
+	Permission string   `xml:"Permission"`
 }
 
 type Grantee struct {
-	XMLName xml.Name `xml:"Grantee"`
-	Id string `xml:"ID"`
-	DisplayName string `xml:"DisplayName"`
-	XmlNS string `xml:"xmlns:xsi,attr"`
-	Xsi string `xml:"xsi:type,attr"`
+	XMLName     xml.Name `xml:"Grantee"`
+	Id          string   `xml:"ID"`
+	DisplayName string   `xml:"DisplayName"`
+	XmlNS       string   `xml:"xmlns:xsi,attr"`
+	Xsi         string   `xml:"xsi:type,attr"`
 }
 
 type AWSListBucketResponse struct {
-	XMLName xml.Name `xml:"ListBucketResult"`
-	XmlNS string `xml:"xmlns,attr"`
-	Name *string `xml:"Name"`
-	Prefix *string `xml:"Prefix"`
-	Delimiter *string `xml:"Delimiter,omitempty"`
-	Marker *string `xml:"Marker"`
-	KeyCount int64 `xml:"KeyCount"`
-	MaxKeys *int64 `xml:"MaxKeys"`
-	IsTruncated *bool `xml:"IsTruncated"`
-	Contents []*BucketContent `xml:"Contents"`
-	CommonPrefixes []*BucketCommonPrefix `xml:"CommonPrefixes,omitempty"`
-	ContinuationToken *string `xml:"ContinuationToken"`
-	NextContinuationToken *string `xml:"NextContinuationToken"`
+	XMLName               xml.Name              `xml:"ListBucketResult"`
+	XmlNS                 string                `xml:"xmlns,attr"`
+	Name                  *string               `xml:"Name"`
+	Prefix                *string               `xml:"Prefix"`
+	Delimiter             *string               `xml:"Delimiter,omitempty"`
+	Marker                *string               `xml:"Marker"`
+	KeyCount              int64                 `xml:"KeyCount"`
+	MaxKeys               *int64                `xml:"MaxKeys"`
+	IsTruncated           *bool                 `xml:"IsTruncated"`
+	Contents              []*BucketContent      `xml:"Contents"`
+	CommonPrefixes        []*BucketCommonPrefix `xml:"CommonPrefixes,omitempty"`
+	ContinuationToken     *string               `xml:"ContinuationToken"`
+	NextContinuationToken *string               `xml:"NextContinuationToken"`
 }
 
 type BucketContent struct {
-	Key string `xml:"Key"`
+	Key          string `xml:"Key"`
 	LastModified string `xml:"LastModified"`
-	ETag string `xml:"ETag"`
-	Size int64 `xml:"Size"`
+	ETag         string `xml:"ETag"`
+	Size         int64  `xml:"Size"`
 	StorageClass string `xml:"StorageClass"`
 }
 
@@ -121,37 +120,37 @@ type BucketCommonPrefix struct {
 }
 
 type InitiateMultipartUploadResult struct {
-	XMLName xml.Name `xml:"InitiateMultipartUploadResult"`
-	XmlNS string `xml:"xmlns,attr"`
-	Bucket *string `xml:"Bucket"`
-	Key *string `xml:"Key"`
-	UploadId *string `xml:"UploadId"`
+	XMLName  xml.Name `xml:"InitiateMultipartUploadResult"`
+	XmlNS    string   `xml:"xmlns,attr"`
+	Bucket   *string  `xml:"Bucket"`
+	Key      *string  `xml:"Key"`
+	UploadId *string  `xml:"UploadId"`
 }
 
 type MultipartPart struct {
-	ETag *string `xml:"ETag"`
-	PartNumber *int64 `xml:"PartNumber"`
+	ETag       *string `xml:"ETag"`
+	PartNumber *int64  `xml:"PartNumber"`
 }
 
 type CompleteMultipartUploadInput struct {
-	XMLName xml.Name `xml:"CompleteMultipartUpload"`
-	XmlNS string `xml:"xmlns,attr"`
-	Parts []*MultipartPart `xml:"Part"`
+	XMLName xml.Name         `xml:"CompleteMultipartUpload"`
+	XmlNS   string           `xml:"xmlns,attr"`
+	Parts   []*MultipartPart `xml:"Part"`
 }
 
 type CompleteMultipartUploadResult struct {
-	XMLName xml.Name `xml:"CompleteMultipartUploadResult"`
-	XmlNS string `xml:"xmlns,attr"`
-	Bucket *string `xml:"Bucket"`
-	Key *string `xml:"Key"`
-	ETag *string `xml:"ETag"`
-	Location *string `xml:"Location"`
+	XMLName  xml.Name `xml:"CompleteMultipartUploadResult"`
+	XmlNS    string   `xml:"xmlns,attr"`
+	Bucket   *string  `xml:"Bucket"`
+	Key      *string  `xml:"Key"`
+	ETag     *string  `xml:"ETag"`
+	Location *string  `xml:"Location"`
 }
 
 type CopyResult struct {
-	XMLName xml.Name `xml:"CopyObjectResult"`
-	LastModified string `xml:"LastModified"`
-	ETag string `xml:"ETag"`
+	XMLName      xml.Name `xml:"CopyObjectResult"`
+	LastModified string   `xml:"LastModified"`
+	ETag         string   `xml:"ETag"`
 }
 
 type DeleteObject struct {
@@ -159,27 +158,27 @@ type DeleteObject struct {
 }
 
 type MultiDeleteRequest struct {
-	XMLName xml.Name `xml:"Delete"`
-	Quiet *bool `xml:"Bucket"`
+	XMLName xml.Name        `xml:"Delete"`
+	Quiet   *bool           `xml:"Bucket"`
 	Objects []*DeleteObject `xml:"Object"`
 }
 
 type MultiDeleteResult struct {
-	XMLName xml.Name `xml:"DeleteResult"`
-	XmlNS string `xml:"xmlns,attr"`
+	XMLName xml.Name        `xml:"DeleteResult"`
+	XmlNS   string          `xml:"xmlns,attr"`
 	Objects []*DeleteObject `xml:"Deleted"`
-	Errors []*ErrorResult `xml:"Error"`
+	Errors  []*ErrorResult  `xml:"Error"`
 }
 
 type AWSACLResponseError struct {
 	XMLName xml.Name `xml:"Error"`
-	Key *string `xml:"Key"`
-	Code *string `xml:"Code"`
-	Message *string `xml:"Message"`
+	Key     *string  `xml:"Key"`
+	Code    *string  `xml:"Code"`
+	Message *string  `xml:"Message"`
 }
 
 type ErrorResult struct {
-	Key *string `xml:"Key"`
-	Code *string `xml:"Code"`
+	Key     *string `xml:"Key"`
+	Code    *string `xml:"Code"`
 	Message *string `xml:"Message"`
 }

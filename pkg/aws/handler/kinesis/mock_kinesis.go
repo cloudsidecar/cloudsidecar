@@ -106,8 +106,6 @@ func (mr *MockGCPClientMockRecorder) Topic(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Topic", reflect.TypeOf((*MockGCPClient)(nil).Topic), arg0)
 }
 
-
-
 // MockGCPTopic is a mock of GCPTopic interface
 type MockGCPTopic struct {
 	ctrl     *gomock.Controller
@@ -174,8 +172,6 @@ func (mr *MockGCPTopicMockRecorder) Publish(arg0, arg1 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockGCPTopic)(nil).Publish), arg0, arg1)
 }
 
-
-
 // MockGCPPublishResult is a mock of GCPPublishResult interface
 type MockGCPPublishResult struct {
 	ctrl     *gomock.Controller
@@ -239,4 +235,3 @@ func (mr *MockGCPTopicMockRecorder) Stop() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockGCPTopic)(nil).Stop))
 }
-

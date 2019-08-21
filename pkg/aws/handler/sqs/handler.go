@@ -23,14 +23,14 @@ import (
 )
 
 type Handler struct {
-	SqsClient *sqs.SQS
-	GCPClient kinesis.GCPClient
+	SqsClient        *sqs.SQS
+	GCPClient        kinesis.GCPClient
 	GCPClientToTopic func(topic string, client kinesis.GCPClient) kinesis.GCPTopic
 	GCPResultWrapper func(result *pubsub.PublishResult) kinesis.GCPPublishResult
-	GCPKMSClient *kms.KeyManagementClient
-	Context *context.Context
-	Config *viper.Viper
-	ToAck map[string]chan bool
+	GCPKMSClient     *kms.KeyManagementClient
+	Context          *context.Context
+	Config           *viper.Viper
+	ToAck            map[string]chan bool
 }
 
 type HandlerInterface interface {
@@ -67,7 +67,7 @@ type HandlerInterface interface {
 }
 
 type MessageAttributeNameAndValue struct {
-	Name *string
+	Name  *string
 	Value *sqs.MessageAttributeValue
 }
 
@@ -77,13 +77,13 @@ func (handler *Handler) GetSqsClient() *sqs.SQS {
 func (handler *Handler) GetGCPClient() kinesis.GCPClient {
 	return handler.GCPClient
 }
-func (handler *Handler) GetContext() *context.Context{
+func (handler *Handler) GetContext() *context.Context {
 	return handler.Context
 }
 func (handler *Handler) GetConfig() *viper.Viper {
 	return handler.Config
 }
-func (handler *Handler) SetSqsClient(sqsClient *sqs.SQS){
+func (handler *Handler) SetSqsClient(sqsClient *sqs.SQS) {
 	handler.SqsClient = sqsClient
 }
 func (handler *Handler) SetGCPClient(gcpClient kinesis.GCPClient) {
@@ -95,8 +95,6 @@ func (handler *Handler) SetContext(context *context.Context) {
 func (handler *Handler) SetConfig(config *viper.Viper) {
 	handler.Config = config
 }
-
-
 
 func New() *Handler {
 	return &Handler{
@@ -145,13 +143,13 @@ func processError(err error, writer http.ResponseWriter) {
 				Message: err.Error(),
 			},
 		}
-	} else if strings.Contains(err.Error(), "InvalidAddress"){
+	} else if strings.Contains(err.Error(), "InvalidAddress") {
 		writer.WriteHeader(404)
 		errorResp = &response_type.SqsErrorResponse{
 			XmlNS: response_type.XmlNs,
 			Error: &response_type.SqsError{
-				Type: "Sender",
-				Code: "InvalidAddress",
+				Type:    "Sender",
+				Code:    "InvalidAddress",
 				Message: err.Error(),
 			},
 		}
@@ -160,8 +158,8 @@ func processError(err error, writer http.ResponseWriter) {
 		errorResp = &response_type.SqsErrorResponse{
 			XmlNS: response_type.XmlNs,
 			Error: &response_type.SqsError{
-				Type: "Sender",
-				Code: "Unknown",
+				Type:    "Sender",
+				Code:    "Unknown",
 				Message: err.Error(),
 			},
 		}
@@ -228,8 +226,8 @@ func (handler *Handler) CreateHandle(writer http.ResponseWriter, request *http.R
 		ackDuration, _ := time.ParseDuration("1m")
 		retentionDuration, _ := time.ParseDuration("1d")
 		_, err = handler.GCPClient.CreateSubscription(*handler.Context, id, pubsub.SubscriptionConfig{
-			Topic: topic,
-			AckDeadline: ackDuration,
+			Topic:             topic,
+			AckDeadline:       ackDuration,
 			RetentionDuration: retentionDuration,
 		})
 		if err != nil {
@@ -353,7 +351,7 @@ func (handler *Handler) SendHandle(writer http.ResponseWriter, request *http.Req
 	var response *response_type.SendMessageResponse
 	if handler.GCPClient != nil {
 		pieces := strings.Split(*params.QueueUrl, "/")
-		id := pieces[len(pieces) - 1]
+		id := pieces[len(pieces)-1]
 		topic := handler.GCPClientToTopic(id, handler.GCPClient)
 		body := []byte(*params.MessageBody)
 		req, err := handler.gcpPublish(topic, id, &pubsub.Message{
@@ -376,7 +374,7 @@ func (handler *Handler) SendHandle(writer http.ResponseWriter, request *http.Req
 			XmlNS: response_type.XmlNs,
 			SendMessageResult: response_type.SendMessageResult{
 				MD5OfMessageBody: &md5OfBody,
-				MessageId: &resp,
+				MessageId:        &resp,
 			},
 		}
 	} else {
@@ -389,9 +387,9 @@ func (handler *Handler) SendHandle(writer http.ResponseWriter, request *http.Req
 		response = &response_type.SendMessageResponse{
 			XmlNS: response_type.XmlNs,
 			SendMessageResult: response_type.SendMessageResult{
-				MD5OfMessageBody: resp.MD5OfMessageBody,
+				MD5OfMessageBody:       resp.MD5OfMessageBody,
 				MD5OfMessageAttributes: resp.MD5OfMessageAttributes,
-				MessageId: resp.MessageId,
+				MessageId:              resp.MessageId,
 			},
 		}
 	}
@@ -404,7 +402,7 @@ func (handler *Handler) SendHandleParseInput(r *http.Request) (*sqs.SendMessageI
 	url := r.Form.Get("QueueUrl")
 	body := r.Form.Get("MessageBody")
 	input := &sqs.SendMessageInput{
-		QueueUrl: &url,
+		QueueUrl:    &url,
 		MessageBody: &body,
 	}
 	attributes := make(map[string]sqs.MessageAttributeValue)
@@ -442,7 +440,7 @@ func (handler *Handler) SendBatchHandle(writer http.ResponseWriter, request *htt
 	var response *response_type.SendMessageBatchResponse
 	if handler.GCPClient != nil {
 		pieces := strings.Split(*params.QueueUrl, "/")
-		id := pieces[len(pieces) - 1]
+		id := pieces[len(pieces)-1]
 		topic := handler.GCPClientToTopic(id, handler.GCPClient)
 		defer topic.Stop()
 		success := make([]response_type.SendMessageBatchResultEntry, 0)
@@ -463,8 +461,8 @@ func (handler *Handler) SendBatchHandle(writer http.ResponseWriter, request *htt
 			} else {
 				success = append(success, response_type.SendMessageBatchResultEntry{
 					MD5OfMessageBody: &md5OfBody,
-					MessageId: &resp,
-					Id: entry.Id,
+					MessageId:        &resp,
+					Id:               entry.Id,
 				})
 			}
 		}
@@ -484,10 +482,10 @@ func (handler *Handler) SendBatchHandle(writer http.ResponseWriter, request *htt
 		entries := make([]response_type.SendMessageBatchResultEntry, len(resp.Successful))
 		for i, entry := range resp.Successful {
 			entries[i] = response_type.SendMessageBatchResultEntry{
-				Id: entry.Id,
-				MessageId: entry.MessageId,
+				Id:                     entry.Id,
+				MessageId:              entry.MessageId,
 				MD5OfMessageAttributes: entry.MD5OfMessageAttributes,
-				MD5OfMessageBody: entry.MD5OfMessageBody,
+				MD5OfMessageBody:       entry.MD5OfMessageBody,
 			}
 		}
 		response = &response_type.SendMessageBatchResponse{
@@ -511,14 +509,14 @@ func (handler *Handler) SendBatchHandleParseInput(r *http.Request) (*sqs.SendMes
 			entryIndex := pieces[1]
 			entryName := pieces[2]
 			entryValue := formValue[0]
-			if _, ok := entries[entryIndex]; !ok  {
+			if _, ok := entries[entryIndex]; !ok {
 				entries[entryIndex] = &sqs.SendMessageBatchRequestEntry{}
 			}
 			if entryName == "Id" {
 				entries[entryIndex].Id = &entryValue
 			} else if entryName == "MessageBody" {
 				entries[entryIndex].MessageBody = &entryValue
-			} else if strings.Contains(entryName, "MessageAttribute"){
+			} else if strings.Contains(entryName, "MessageAttribute") {
 				messageAttributePieces := strings.Split(entryName, ".")
 				messageAttributeIndex := messageAttributePieces[1]
 				if _, ok := messageAttributes[entryIndex]; !ok {
@@ -555,7 +553,7 @@ func (handler *Handler) SendBatchHandleParseInput(r *http.Request) (*sqs.SendMes
 	}
 	input := &sqs.SendMessageBatchInput{
 		QueueUrl: &url,
-		Entries: entriesList,
+		Entries:  entriesList,
 	}
 	return input, nil
 }
@@ -571,18 +569,18 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 	logging.Log.Debugf("Waiting for %v", timeoutDuration)
 	cctx, cancelFunc := context.WithTimeout(cancelContext, timeoutDuration)
 	pieces := strings.Split(*params.QueueUrl, "/")
-	id := pieces[len(pieces) - 1]
+	id := pieces[len(pieces)-1]
 	var lock sync.Mutex
 	logging.Log.Debugf("Waiting for 1 on %s %v", id, subscriptionInfo)
 	topicPieces := strings.Split(subscriptionInfo.Topic.ID(), "/")
-	topic := topicPieces[len(topicPieces) - 1]
+	topic := topicPieces[len(topicPieces)-1]
 	datas := make([]response_type.SqsMessage, 0)
 	receivedCount := 0
 	ackedCount := 0
 	continueReading := true
 	go func() {
 		select {
-		case <- time.After(readTimeoutDuration):
+		case <-time.After(readTimeoutDuration):
 			lock.Lock()
 			continueReading = false
 			lock.Unlock()
@@ -622,7 +620,7 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 			}
 			lock.Unlock()
 			select {
-			case isAck := <- handler.ToAck[message.ID]:
+			case isAck := <-handler.ToAck[message.ID]:
 				delete(handler.ToAck, message.ID)
 				logging.Log.Debugf("Got ack for %s %v", message.ID, isAck)
 				if isAck {
@@ -630,14 +628,14 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 				} else {
 					message.Nack()
 				}
-				ackedCount ++
+				ackedCount++
 				if ackedCount >= receivedCount {
 					cancelFunc1()
 					cancelFunc()
 					logging.Log.Debugf("Done waiting for acks")
 					return
 				}
-			case <- waitTimeoutChan:
+			case <-waitTimeoutChan:
 				delete(handler.ToAck, message.ID)
 				logging.Log.Debugf("Timeout while waiting for acks")
 				message.Nack()
@@ -660,7 +658,7 @@ func (handler *Handler) ReceiveHandle(writer http.ResponseWriter, request *http.
 	var response *response_type.ReceiveMessageResponse
 	if handler.GCPClient != nil {
 		pieces := strings.Split(*params.QueueUrl, "/")
-		id := pieces[len(pieces) - 1]
+		id := pieces[len(pieces)-1]
 		subscription := handler.GCPClient.Subscription(id)
 		subscriptionInfo, err := subscription.Config(*handler.Context)
 		if err != nil {
@@ -700,16 +698,16 @@ func (handler *Handler) ReceiveHandle(writer http.ResponseWriter, request *http.
 			attributeIndex := 0
 			for attributeKey, attributeValue := range msg.Attributes {
 				attributes[attributeIndex] = response_type.SqsAttribute{
-					Name: attributeKey,
+					Name:  attributeKey,
 					Value: attributeValue,
 				}
 			}
 			messages[i] = response_type.SqsMessage{
-				MessageId: msg.MessageId,
+				MessageId:     msg.MessageId,
 				ReceiptHandle: msg.ReceiptHandle,
-				MD5OfBody: msg.MD5OfBody,
-				Body: msg.Body,
-				Attributes: attributes,
+				MD5OfBody:     msg.MD5OfBody,
+				Body:          msg.Body,
+				Attributes:    attributes,
 			}
 		}
 		response = &response_type.ReceiveMessageResponse{
@@ -799,7 +797,7 @@ func (handler *Handler) DeleteMessageHandleParseInput(r *http.Request) (*sqs.Del
 	url := r.Form.Get("QueueUrl")
 	receipt := r.Form.Get("ReceiptHandle")
 	return &sqs.DeleteMessageInput{
-		QueueUrl: &url,
+		QueueUrl:      &url,
 		ReceiptHandle: &receipt,
 	}, nil
 }
@@ -854,7 +852,6 @@ func (handler *Handler) DeleteMessageBatchHandleParseInput(r *http.Request) (*sq
 	messageAttributes := make([]sqs.DeleteMessageBatchRequestEntry, 0)
 	input := &sqs.DeleteMessageBatchInput{
 		QueueUrl: &url,
-
 	}
 	for key, formValue := range r.Form {
 		if strings.HasPrefix(key, "DeleteMessageBatchRequestEntry") && strings.Contains(key, "Id") {
@@ -862,7 +859,7 @@ func (handler *Handler) DeleteMessageBatchHandleParseInput(r *http.Request) (*sq
 			receiptKey := strings.Replace(key, "Id", "ReceiptHandle", 1)
 			receiptValue := r.Form.Get(receiptKey)
 			messageAttributes = append(messageAttributes, sqs.DeleteMessageBatchRequestEntry{
-				Id: &keyValue,
+				Id:            &keyValue,
 				ReceiptHandle: &receiptValue,
 			})
 		}
@@ -879,7 +876,7 @@ func (handler *Handler) gcpPublish(topic kinesis.GCPTopic, topicName string, mes
 	kvmKey := keyMap[topicName]
 	if kvmKey != "" {
 		req := &kmsproto.EncryptRequest{
-			Name: kvmKey,
+			Name:      kvmKey,
 			Plaintext: message.Data,
 		}
 		resp, err := handler.GCPKMSClient.Encrypt(*handler.Context, req)
@@ -898,7 +895,7 @@ func (handler *Handler) tryToDecrypt(topicName string, message []byte) ([]byte, 
 	kvmKey := keyMap[topicName]
 	if kvmKey != "" {
 		req := &kmsproto.DecryptRequest{
-			Name: kvmKey,
+			Name:       kvmKey,
 			Ciphertext: message,
 		}
 		resp, err := handler.GCPKMSClient.Decrypt(*handler.Context, req)

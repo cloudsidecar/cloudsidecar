@@ -38,19 +38,19 @@ func GCPUpload(input *s3manager.UploadInput, writer Writer) (int64, error) {
 	return bytes, writeErr
 }
 
-func GCSListResponseObjectsToAWS(contents []*response_type.BucketContent, listRequest *s3.ListObjectsInput, nextToken string, contentI int, prefixI int, prefixes []*response_type.BucketCommonPrefix) *response_type.AWSListBucketResponse{
+func GCSListResponseObjectsToAWS(contents []*response_type.BucketContent, listRequest *s3.ListObjectsInput, nextToken string, contentI int, prefixI int, prefixes []*response_type.BucketCommonPrefix) *response_type.AWSListBucketResponse {
 	isTruncated := nextToken != ""
 	s3Resp := &response_type.AWSListBucketResponse{
-		XmlNS: "http://s3.amazonaws.com/doc/2006-03-01/",
-		Name: listRequest.Bucket,
-		Prefix: listRequest.Prefix,
-		Delimiter: nil,
-		KeyCount: int64(contentI + prefixI),
-		MaxKeys: listRequest.MaxKeys,
-		IsTruncated: &isTruncated,
-		Contents: contents,
-		CommonPrefixes: prefixes,
-		ContinuationToken: listRequest.Marker,
+		XmlNS:                 "http://s3.amazonaws.com/doc/2006-03-01/",
+		Name:                  listRequest.Bucket,
+		Prefix:                listRequest.Prefix,
+		Delimiter:             nil,
+		KeyCount:              int64(contentI + prefixI),
+		MaxKeys:               listRequest.MaxKeys,
+		IsTruncated:           &isTruncated,
+		Contents:              contents,
+		CommonPrefixes:        prefixes,
+		ContinuationToken:     listRequest.Marker,
 		NextContinuationToken: &nextToken,
 	}
 	if listRequest.Delimiter != nil && *listRequest.Delimiter != "" {
@@ -63,11 +63,11 @@ func GCSItemToContent(item *storage.ObjectAttrs) *response_type.BucketContent {
 	lastModified := FormatTimeZulu(&item.Updated)
 	other := MD5toEtag(item.MD5)
 	return &response_type.BucketContent{
-		Key: item.Name,
+		Key:          item.Name,
 		LastModified: lastModified,
 		// ETag: fmt.Sprintf("%x", item.MD5[:]),
-		ETag: other,
-		Size: item.Size,
+		ETag:         other,
+		Size:         item.Size,
 		StorageClass: item.StorageClass,
 	}
 }
@@ -93,16 +93,16 @@ func GCSListResponseToAWS(input *storage.ObjectIterator, listRequest *s3.ListObj
 	var err error
 	lastItem := ""
 	// loop through until we have enough objects and folder, or until nothing is left
-	for contentI + prefixI < pageSize {
+	for contentI+prefixI < pageSize {
 		var pageResponse []*storage.ObjectAttrs
 		nextToken, err = iterator.NewPager(input, pageSize, nextToken).NextPage(&pageResponse)
-		if err != nil{
+		if err != nil {
 			logging.Log.Error("Some error paginating", err)
 			return nil, err
 		}
 		// loop through each result, see if it is an object or folder, handle accordingly
 		for _, item := range pageResponse {
-			if contentI + prefixI >= pageSize {
+			if contentI+prefixI >= pageSize {
 				break
 			}
 			if marker != "" {
@@ -150,7 +150,7 @@ func GCSListResponseToAWSv2(input *storage.ObjectIterator, listRequest *s3.ListO
 		marker = *listRequest.Marker
 	}
 	nextToken, err := iterator.NewPager(input, pageSize, marker).NextPage(&pageResponse)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 	var contents = make([]*response_type.BucketContent, len(pageResponse))
@@ -177,9 +177,9 @@ func GCSAttrToCombine(input *storage.ObjectAttrs) *response_type.CompleteMultipa
 	etag := MD5toEtag(input.MD5)
 	location := fmt.Sprintf("http://%s.s3.amazonaws.com/%s", input.Bucket, input.Name)
 	return &response_type.CompleteMultipartUploadResult{
-		Bucket: &input.Bucket,
-		Key: &input.Name,
-		ETag: &etag,
+		Bucket:   &input.Bucket,
+		Key:      &input.Name,
+		ETag:     &etag,
 		Location: &location,
 	}
 }
@@ -222,9 +222,9 @@ func GCSACLResponseToAWS(input []storage.ACLRule) response_type.AWSACLResponse {
 				Permission: gcpPermissionToAWS(entry.Role),
 				Grantee: &response_type.Grantee{
 					DisplayName: displayName,
-					Id: string(entry.Entity),
-					XmlNS: response_type.ACLXmlNs,
-					Xsi: response_type.ACLXmlXsi,
+					Id:          string(entry.Entity),
+					XmlNS:       response_type.ACLXmlNs,
+					Xsi:         response_type.ACLXmlXsi,
 				},
 			}
 			grants[i] = grant
@@ -233,8 +233,7 @@ func GCSACLResponseToAWS(input []storage.ACLRule) response_type.AWSACLResponse {
 			Grants: grants,
 		}
 	} else {
-		response.AccessControlList = &response_type.AccessControlList{
-		}
+		response.AccessControlList = &response_type.AccessControlList{}
 	}
 	return response
 }

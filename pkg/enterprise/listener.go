@@ -15,14 +15,13 @@ var instanceType reflect.Type
 
 type Enterprise interface {
 	RegisterHandler(awsConfig config.AWSConfig, router *mux.Router, group sync.WaitGroup) bool
-	RegisterMiddlewares() map[string]func (config *viper.Viper) func (next http.Handler) http.Handler
+	RegisterMiddlewares() map[string]func(config *viper.Viper) func(next http.Handler) http.Handler
 	Init()
 }
 
 func RegisterType(typ reflect.Type) {
 	instanceType = typ
 }
-
 
 func GetSingleton() Enterprise {
 	if instance != nil {
@@ -47,15 +46,14 @@ func GetSingleton() Enterprise {
 }
 
 type Noop struct {
-
 }
 
 func (*Noop) RegisterHandler(awsConfig config.AWSConfig, router *mux.Router, group sync.WaitGroup) bool {
 	return false
 }
 
-func (*Noop) RegisterMiddlewares() map[string]func (config *viper.Viper) func (next http.Handler) http.Handler {
-	return make(map[string]func (config *viper.Viper) func (next http.Handler) http.Handler)
+func (*Noop) RegisterMiddlewares() map[string]func(config *viper.Viper) func(next http.Handler) http.Handler {
+	return make(map[string]func(config *viper.Viper) func(next http.Handler) http.Handler)
 }
 
 func (*Noop) Init() {

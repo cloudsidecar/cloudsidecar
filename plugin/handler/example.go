@@ -1,24 +1,23 @@
 package main
 
 import (
+	"cloudsidecar/pkg/aws/handler"
 	"context"
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
 	"net/http"
-	"cloudsidecar/pkg/aws/handler"
 )
 
 func Register(r *mux.Router) handler.HandlerInterface {
 	r.HandleFunc("/moops", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Write([]byte("Test"))
 	})
-	return &Bleh{
-	}
+	return &Bleh{}
 }
 
 type Bleh struct {
 	context *context.Context
-	config *viper.Viper
+	config  *viper.Viper
 }
 
 func (bleh *Bleh) GetContext() *context.Context {
@@ -36,5 +35,3 @@ func (bleh *Bleh) SetContext(context *context.Context) {
 func (bleh *Bleh) SetConfig(config *viper.Viper) {
 	bleh.config = config
 }
-
-

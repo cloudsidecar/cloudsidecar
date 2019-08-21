@@ -20,8 +20,8 @@ func TestKinesisHandler_CreateStreamParseInput(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"streamname\" : \"my_stream\"}"))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	handler := New(nil)
 	result, _ := handler.CreateStreamParseInput(req)
@@ -32,20 +32,18 @@ func TestKinesisHandler_CreateStreamHandle(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"streamname\" : \"my_stream\"}"))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockGcpClient := NewMockGCPClient(ctrl)
-	mockGcpClient.EXPECT().CreateTopic(ctx, "my_stream").Return(&pubsub.Topic{
-
-	}, nil)
+	mockGcpClient.EXPECT().CreateTopic(ctx, "my_stream").Return(&pubsub.Topic{}, nil)
 	handler := &KinesisHandler{
 		&Handler{
 			GCPClient: mockGcpClient,
-			Context: &ctx,
+			Context:   &ctx,
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
@@ -57,8 +55,8 @@ func TestKinesisHandler_DeleteStreamParseInput(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"streamname\" : \"my_stream\"}"))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	handler := New(nil)
 	result, _ := handler.DeleteStreamParseInput(req)
@@ -69,8 +67,8 @@ func TestKinesisHandler_DeleteStreamHandle(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"streamname\" : \"my_stream\"}"))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
@@ -96,8 +94,8 @@ func TestKinesisHandler_DescribeParseInput(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"streamname\" : \"my_stream\"}"))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	handler := New(nil)
 	result, _ := handler.DescribeParseInput(req)
@@ -108,16 +106,15 @@ func TestKinesisHandler_DescribeHandle(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"streamname\" : \"my_stream\"}"))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockGcpClient := NewMockGCPClient(ctrl)
 	mockGcpTopic := NewMockGCPTopic(ctrl)
-	mockGcpTopic.EXPECT().Config(ctx).Return(pubsub.TopicConfig{
-	}, nil)
+	mockGcpTopic.EXPECT().Config(ctx).Return(pubsub.TopicConfig{}, nil)
 	handler := &KinesisHandler{
 		&Handler{
 			GCPClient: mockGcpClient,
@@ -137,8 +134,8 @@ func TestKinesisHandler_StartStreamEncryptionParseInput(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"streamname\" : \"my_stream\"}"))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	handler := New(nil)
 	result, _ := handler.StartStreamEncryptionParseInput(req)
@@ -149,8 +146,8 @@ func TestKinesisHandler_StartStreamEncryptionHandle(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"streamname\" : \"my_stream\"}"))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
@@ -159,7 +156,7 @@ func TestKinesisHandler_StartStreamEncryptionHandle(t *testing.T) {
 	handler := &KinesisHandler{
 		&Handler{
 			GCPClient: mockGcpClient,
-			Context: &ctx,
+			Context:   &ctx,
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
@@ -171,8 +168,8 @@ func TestKinesisHandler_PublishParseInput(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"streamname\" : \"my_stream\", \"data\": \"bvrp\"}"))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	handler := New(nil)
 	result, _ := handler.PublishParseInput(req)
@@ -186,8 +183,8 @@ func TestKinesisHandler_PublishHandle(t *testing.T) {
 	messageJson := fmt.Sprintf("{\"streamname\" : \"my_stream\", \"data\": \"%s\"}", bvrp)
 	fakeReader := ioutil.NopCloser(strings.NewReader(messageJson))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
@@ -210,7 +207,7 @@ func TestKinesisHandler_PublishHandle(t *testing.T) {
 			GCPResultWrapper: func(result *pubsub.PublishResult) GCPPublishResult {
 				return mockGcpPublishResult
 			},
-			Config: viper.New(),
+			Config:  viper.New(),
 			Context: &ctx,
 		},
 	}
@@ -224,8 +221,8 @@ func TestKinesisHandler_GetRecordsParseInput(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"ShardIterator\" : \"my_shard\", \"Limit\": 123}"))
 	req := &http.Request{
-		URL: testUrl,
-		Body:fakeReader,
+		URL:  testUrl,
+		Body: fakeReader,
 	}
 	handler := New(nil)
 	result, _ := handler.GetRecordsParseInput(req)
