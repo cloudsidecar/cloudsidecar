@@ -58,12 +58,12 @@ func readInConfigsFromDirectory() error {
 		logging.Log.Error("Watch error", err)
 		return err
 	}
+	if watcherErr := watcher.Add(configDir); watcherErr != nil {
+		return watcherErr
+	}
 	err = filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() && (strings.HasSuffix(info.Name(), ".yaml") || strings.HasSuffix(info.Name(), ".json")) {
+		if !info.IsDir() && isConfigFile(info.Name()) {
 			logging.Log.Info("Loading config file %s", path)
-			if watcherErr := watcher.Add(path); watcherErr != nil {
-				return watcherErr
-			}
 			viper.SetConfigFile(path)
 			if i == 0 {
 				i++
@@ -80,6 +80,11 @@ func readInConfigsFromDirectory() error {
 	return err
 }
 
+func isConfigFile(filename string) bool {
+	return strings.HasSuffix(filename, ".yaml") || strings.HasSuffix(filename, ".json")
+
+}
+
 func watchMultipleFiles() {
 	select {
 	case e, ok := <-watcher.Events:
@@ -87,7 +92,9 @@ func watchMultipleFiles() {
 			if err := readInConfigsFromDirectory(); err != nil {
 				logging.Log.Error("Error reloading", err)
 			}
-			change <- e.Name
+			if isConfigFile(e.Name) {
+				change <- e.Name
+			}
 			return
 		}
 	case err, _ := <-watcher.Errors:

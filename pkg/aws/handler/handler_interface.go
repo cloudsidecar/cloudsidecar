@@ -6,6 +6,7 @@ import (
 )
 
 type HandlerInterface interface {
+	Shutdown()
 	GetContext() *context.Context
 	GetConfig() *viper.Viper
 	SetContext(context *context.Context)

@@ -158,6 +158,13 @@ func (handler *Handler) GetGCPClient(key string) (GCPClient, error) {
 	}
 	return handler.GCPClient()
 }
+func (handler *Handler) Shutdown() {
+	for _, pool := range handler.GCPClientPool {
+		for _, conn := range pool {
+			conn.Close()
+		}
+	}
+}
 func (handler *Handler) GetContext() *context.Context {
 	return handler.Context
 }
