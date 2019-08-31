@@ -71,6 +71,16 @@ type MessageAttributeNameAndValue struct {
 	Value *sqs.MessageAttributeValue
 }
 
+func (handler *Handler) Shutdown() {
+	logging.Log.Debug("Closing pubsub")
+	if err := handler.GCPClient.Close(); err != nil {
+		logging.Log.Error("Some error closing pubsub", err)
+	}
+	if err := handler.GCPKMSClient.Close(); err != nil {
+		logging.Log.Error("Some error closing PKMS", err)
+	}
+}
+
 func (handler *Handler) GetSqsClient() *sqs.SQS {
 	return handler.SqsClient
 }

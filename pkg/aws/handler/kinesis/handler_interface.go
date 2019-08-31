@@ -53,6 +53,9 @@ func (handler *Handler) SetContext(context *context.Context) {
 func (handler *Handler) SetConfig(config *viper.Viper) {
 	handler.Config = config
 }
+func (handler *Handler) Shutdown() {
+	handler.GCPClient.Close()
+}
 
 type GCPClient interface {
 	CreateSubscription(ctx context.Context, id string, cfg pubsub.SubscriptionConfig) (*pubsub.Subscription, error)
