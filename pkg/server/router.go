@@ -245,6 +245,7 @@ func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSyst
 		if oldHandler != nil {
 			logging.Log.Infof("Handler %s already exists, replacing", key)
 		}
+		oldHandler := awsHandlers[key]
 		handlers[key] = awsHandler
 		port := awsConfig.Port
 		// Add in configured middlewares
