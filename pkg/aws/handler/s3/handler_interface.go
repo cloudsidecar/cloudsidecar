@@ -164,6 +164,7 @@ func (handler *Handler) Shutdown() {
 			conn.Close()
 		}
 	}
+	logging.Log.Debug("Shutdown s3")
 }
 func (handler *Handler) GetContext() *context.Context {
 	return handler.Context
