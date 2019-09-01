@@ -286,6 +286,7 @@ func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSyst
 			srv.Close()
 			delete(servers, key)
 			delete(routes, key)
+			delete(awsHandlers, key)
 		}
 	}
 	awsHandlers = handlers
