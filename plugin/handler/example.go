@@ -20,6 +20,10 @@ type Bleh struct {
 	config  *viper.Viper
 }
 
+func (bleh *Bleh) Shutdown() {
+	panic("implement me")
+}
+
 func (bleh *Bleh) GetContext() *context.Context {
 	return bleh.context
 }

@@ -25,14 +25,53 @@ import (
 	"net/http"
 	"plugin"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
+var listenLock sync.Mutex
+
 type RouteWrapper struct {
-	Mux http.Handler
+	router *RouterWithCounter
+	mutex sync.Mutex
+}
+
+type RouterWithCounter struct {
+	mux *mux.Router
+	currentRequests int32
+}
+
+func (router *RouterWithCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt32(&router.currentRequests, 1)
+	router.mux.ServeHTTP(w, r)
+	atomic.AddInt32(&router.currentRequests, -1)
+}
+
+func (router *RouterWithCounter) ShutdownWhenReady(handler awshandler.HandlerInterface) {
+	for {
+		if atomic.LoadInt32(&router.currentRequests) <= 0 {
+			handler.Shutdown()
+			return
+		}
+		if duration, err := time.ParseDuration("1s"); err == nil {
+			time.Sleep(duration)
+		}
+	}
+}
+
+func (wrapper *RouteWrapper) ChangeRouter(newRouter *RouterWithCounter, oldHandler awshandler.HandlerInterface) {
+	wrapper.mutex.Lock()
+	oldRouter := wrapper.router
+	wrapper.router = newRouter
+	wrapper.mutex.Unlock()
+	go oldRouter.ShutdownWhenReady(oldHandler)
 }
 
 func (wrapper *RouteWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	wrapper.Mux.ServeHTTP(w, r)
+	wrapper.mutex.Lock()
+	router := wrapper.router
+	wrapper.mutex.Unlock()
+	router.ServeHTTP(w, r)
 }
 
 func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enterprise.Enterprise, serverWaitGroup *sync.WaitGroup) (handler awshandler.HandlerInterface, router *mux.Router, toListen bool) {
@@ -155,7 +194,7 @@ func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enter
 		handler.Register(r)
 	} else if awsConfig.ServiceType == "" {
 		logging.Log.Error("No service type configured for port ", awsConfig.Port)
-	} else if enterpriseSystem.RegisterHandler(*awsConfig, r, *serverWaitGroup) {
+	} else if enterpriseSystem.RegisterHandler(*awsConfig, r, serverWaitGroup) {
 		toListen = false
 		// do nothing, enterprise got this
 	} else {
@@ -186,6 +225,8 @@ func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enter
 }
 
 func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSystem enterprise.Enterprise) {
+	listenLock.Lock()
+	defer listenLock.Unlock()
 	handlers := make(map[string]awshandler.HandlerInterface)
 	middlewares := getMiddlewares(enterpriseSystem, config)
 	// for each configured aws config, we want to set up an http listener
@@ -193,8 +234,8 @@ func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSyst
 		awsHandler, r, toListen := CreateHandler(key, &awsConfig, enterpriseSystem, serverWaitGroup)
 		if _, ok := awsHandlers[key]; ok {
 			logging.Log.Infof("Handler %s already exists, replacing", key)
-
 		}
+		oldHandler := awsHandlers[key]
 		handlers[key] = awsHandler
 		port := awsConfig.Port
 		for _, middlewareName := range awsConfig.Middleware {
@@ -204,14 +245,18 @@ func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSyst
 				logging.Log.Error("Could not find middleware ", middlewareName)
 			}
 		}
-		serverWaitGroup.Add(1)
 		// listen for all handlers
 		if toListen {
 			routewrapper := &RouteWrapper{
-				Mux: r,
+				router: &RouterWithCounter{
+					mux: r,
+				},
 			}
 			if existingRouter, ok := routes[key]; ok {
-				existingRouter.Mux = r
+				logging.Log.Debug("Route existed", key)
+				existingRouter.ChangeRouter(&RouterWithCounter{
+					mux: r,
+				}, oldHandler)
 				routewrapper = existingRouter
 			}
 			routes[key] = routewrapper
@@ -226,6 +271,7 @@ func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSyst
 					continue
 				}
 			} else {
+				serverWaitGroup.Add(1)
 				servers[key] = srv
 				go func() {
 					logging.Log.Error("", srv.ListenAndServe())
