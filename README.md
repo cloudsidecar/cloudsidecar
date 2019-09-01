@@ -75,6 +75,10 @@ Take a look at example.yaml
 ## Run
 `./main example.conf`
 
+## Building
+The version is stored in `pkg/server/listener.go`.  To build run `./build.sh`, which utilizes the version mentioned in the listener.go file.
+
+
 
 ## Plugins
 CS lets you add on your own code or third party code.  Plugins do not require recompiling CS, just drop them into a certain path and restart.
