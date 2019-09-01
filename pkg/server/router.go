@@ -28,24 +28,29 @@ import (
 	"time"
 )
 
+// Lock to run listen function only once
 var listenLock sync.Mutex
 
+// Router with a lock
 type RouteWrapper struct {
 	router *RouterWithCounter
 	mutex  sync.Mutex
 }
 
+// Mux router with counter to make sure we don't close anything in use
 type RouterWithCounter struct {
 	mux             *mux.Router
 	currentRequests int32
 }
 
+// Interface implementation gets called on each request that keeps track of current request count
 func (router *RouterWithCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt32(&router.currentRequests, 1)
 	router.mux.ServeHTTP(w, r)
 	atomic.AddInt32(&router.currentRequests, -1)
 }
 
+// Shutdown a handler if there are no current requests
 func (router *RouterWithCounter) ShutdownWhenReady(handler awshandler.HandlerInterface) {
 	for {
 		if atomic.LoadInt32(&router.currentRequests) <= 0 {
@@ -58,6 +63,7 @@ func (router *RouterWithCounter) ShutdownWhenReady(handler awshandler.HandlerInt
 	}
 }
 
+// Switch router when config changes
 func (wrapper *RouteWrapper) ChangeRouter(newRouter *RouterWithCounter, oldHandler awshandler.HandlerInterface) {
 	wrapper.mutex.Lock()
 	oldRouter := wrapper.router
@@ -66,6 +72,7 @@ func (wrapper *RouteWrapper) ChangeRouter(newRouter *RouterWithCounter, oldHandl
 	go oldRouter.ShutdownWhenReady(oldHandler)
 }
 
+// Interface implementation gets called on each request.  Makes sure to use a lock in case router changes
 func (wrapper *RouteWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wrapper.mutex.Lock()
 	router := wrapper.router
@@ -73,6 +80,7 @@ func (wrapper *RouteWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	router.ServeHTTP(w, r)
 }
 
+// Create a handler from config
 func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enterprise.Enterprise, serverWaitGroup *sync.WaitGroup) (handler awshandler.HandlerInterface, router *mux.Router, toListen bool) {
 	var awsHandler awshandler.HandlerInterface
 	toListen = true
@@ -223,7 +231,9 @@ func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enter
 	return awsHandler, r, toListen
 }
 
+// Listen for all configured services.  Gets called when started or configs change
 func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSystem enterprise.Enterprise) {
+	// Only run one at a time
 	listenLock.Lock()
 	defer listenLock.Unlock()
 	handlers := make(map[string]awshandler.HandlerInterface)
@@ -231,12 +241,13 @@ func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSyst
 	// for each configured aws config, we want to set up an http listener
 	for key, awsConfig := range config.AwsConfigs {
 		awsHandler, r, toListen := CreateHandler(key, &awsConfig, enterpriseSystem, serverWaitGroup)
-		if _, ok := awsHandlers[key]; ok {
+		oldHandler := awsHandlers[key]
+		if oldHandler != nil {
 			logging.Log.Infof("Handler %s already exists, replacing", key)
 		}
-		oldHandler := awsHandlers[key]
 		handlers[key] = awsHandler
 		port := awsConfig.Port
+		// Add in configured middlewares
 		for _, middlewareName := range awsConfig.Middleware {
 			if middleware, ok := middlewares[middlewareName]; ok {
 				r.Use(middleware)
