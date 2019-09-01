@@ -1,6 +1,5 @@
 package server
 
-
 import (
 	"cloud.google.com/go/pubsub"
 	awshandler "cloudsidecar/pkg/aws/handler"
@@ -33,11 +32,11 @@ var listenLock sync.Mutex
 
 type RouteWrapper struct {
 	router *RouterWithCounter
-	mutex sync.Mutex
+	mutex  sync.Mutex
 }
 
 type RouterWithCounter struct {
-	mux *mux.Router
+	mux             *mux.Router
 	currentRequests int32
 }
 

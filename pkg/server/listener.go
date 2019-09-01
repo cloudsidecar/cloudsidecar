@@ -26,8 +26,10 @@ const Version = "0.0.13"
 
 // Handlers map
 var awsHandlers map[string]awshandler.HandlerInterface
+
 // Handles http requests
 var routes map[string]*RouteWrapper
+
 // Http Servers map
 var servers map[string]*http.Server
 
@@ -122,7 +124,6 @@ func getMiddlewares(enterpriseSystem enterprise.Enterprise, config *conf.Config)
 	}
 	return results
 }
-
 
 // Main function, runs http server
 func Main(config *conf.Config, onConfigChange <-chan string, cmd *cobra.Command, args []string) {
