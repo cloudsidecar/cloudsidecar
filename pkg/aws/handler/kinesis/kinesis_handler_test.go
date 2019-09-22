@@ -16,6 +16,12 @@ import (
 	"testing"
 )
 
+func getConfig() *viper.Viper {
+	config := viper.New()
+	config.Set("gcp_destination_config", "meow")
+	return config
+}
+
 func TestKinesisHandler_CreateStreamParseInput(t *testing.T) {
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/")
 	fakeReader := ioutil.NopCloser(strings.NewReader("{\"streamname\" : \"my_stream\"}"))
@@ -44,6 +50,7 @@ func TestKinesisHandler_CreateStreamHandle(t *testing.T) {
 		&Handler{
 			GCPClient: mockGcpClient,
 			Context:   &ctx,
+			Config: getConfig(),
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
@@ -83,6 +90,7 @@ func TestKinesisHandler_DeleteStreamHandle(t *testing.T) {
 				return mockGcpTopic
 			},
 			Context: &ctx,
+			Config: getConfig(),
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
@@ -122,6 +130,7 @@ func TestKinesisHandler_DescribeHandle(t *testing.T) {
 				return mockGcpTopic
 			},
 			Context: &ctx,
+			Config: getConfig(),
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
@@ -157,6 +166,7 @@ func TestKinesisHandler_StartStreamEncryptionHandle(t *testing.T) {
 		&Handler{
 			GCPClient: mockGcpClient,
 			Context:   &ctx,
+			Config: getConfig(),
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)
@@ -207,8 +217,8 @@ func TestKinesisHandler_PublishHandle(t *testing.T) {
 			GCPResultWrapper: func(result *pubsub.PublishResult) GCPPublishResult {
 				return mockGcpPublishResult
 			},
-			Config:  viper.New(),
 			Context: &ctx,
+			Config: getConfig(),
 		},
 	}
 	writerMock := mock.NewMockResponseWriter(ctrl)

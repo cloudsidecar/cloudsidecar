@@ -8,10 +8,17 @@ import (
 	"fmt"
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
+	"github.com/spf13/viper"
 	"net/http"
 	"net/url"
 	"testing"
 )
+
+func getConfig() *viper.Viper {
+	config := viper.New()
+	config.Set("gcp_destination_config", "meow")
+	return config
+}
 
 func TestHandler_ACLParseInput(t *testing.T) {
 	valueMap := map[string]string{"bucket": "boops"}
@@ -43,6 +50,7 @@ func TestHandler_ACLHandle(t *testing.T) {
 			return bucketMock
 		},
 		Context: &ctx,
+		Config: getConfig(),
 	}
 	handler := New(s3Handler)
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")
@@ -114,6 +122,7 @@ func TestHandler_ListHandle_Success(t *testing.T) {
 			return bucketMock
 		},
 		Context: &ctx,
+		Config: getConfig(),
 	}
 	handler := New(s3Handler)
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")

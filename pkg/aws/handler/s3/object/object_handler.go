@@ -103,7 +103,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 	s3Req, _ := handler.CompleteMultiPartParseInput(request)
 	var resp *response_type.CompleteMultipartUploadResult
 	var err error
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := handler.GCPRequestSetup(request)
@@ -258,7 +258,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 	s3Req, _ := handler.UploadPartParseInput(request)
 	var resp *s3.UploadPartOutput
 	var err error
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := handler.GCPRequestSetup(request)
@@ -356,7 +356,8 @@ func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *htt
 	var resp *response_type.InitiateMultipartUploadResult
 	var createResp *s3.CreateMultipartUploadOutput
 	var err error
-	if handler.GCPClient != nil {
+
+	if handler.Config.IsSet("gcp_destination_config") {
 		// GCS, so create a temporary local file to store parts.  This file is used to join parts later
 		uuid := uuid2.New().String()
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), uuid)
@@ -452,7 +453,7 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 	s3Req, _ := handler.PutParseInput(request)
 	var err error
 	defer request.Body.Close()
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := handler.GCPRequestSetup(request)
@@ -505,7 +506,7 @@ func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Requ
 	if header := request.Header.Get("Range"); header != "" {
 		input.Range = &header
 	}
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		logging.Log.Info("Begin GET request", identifier, request.RequestURI, request.Header.Get("Range"))
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
@@ -606,7 +607,7 @@ func (handler *Handler) HeadParseInput(r *http.Request) (*s3.HeadObjectInput, er
 // Handle HEAD request
 func (handler *Handler) HeadHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := handler.HeadParseInput(request)
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		var resp *storage.ObjectAttrs
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
@@ -717,7 +718,7 @@ func (handler *Handler) CopyParseInput(r *http.Request) (*s3.CopyObjectInput, er
 func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.CopyParseInput(request)
 	var copyResult response_type.CopyResult
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := handler.GCPRequestSetup(request)
@@ -784,7 +785,7 @@ func (handler *Handler) DeleteParseInput(r *http.Request) (*s3.DeleteObjectInput
 // Handle delete operation
 func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.DeleteParseInput(request)
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := handler.GCPRequestSetup(request)
@@ -858,7 +859,7 @@ func (handler *Handler) MultiDeleteParseInput(r *http.Request) (*s3.DeleteObject
 func (handler *Handler) MultiDeleteHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.MultiDeleteParseInput(request)
 	response := response_type.MultiDeleteResult{}
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := handler.GCPRequestSetup(request)

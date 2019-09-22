@@ -93,7 +93,7 @@ func (handler *KinesisHandler) StartStreamEncryptionHandle(writer http.ResponseW
 		writer.Write([]byte(fmt.Sprint(err)))
 		return
 	}
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 
 	} else {
 		_, err := handler.KinesisClient.StartStreamEncryptionRequest(payload).Send()
@@ -144,7 +144,7 @@ func (handler *KinesisHandler) GetRecordsHandle(writer http.ResponseWriter, requ
 		return
 	}
 	var output *kinesis.GetRecordsOutput
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		cancelContext, cancel1 := context.WithCancel(*handler.Context)
 		timeoutConfig := handler.Config.GetString("gcp_destination_config.pub_sub_config.read_timeout")
 		if timeoutConfig == "" {
@@ -257,7 +257,7 @@ func (handler *KinesisHandler) GetShardIteratorHandle(writer http.ResponseWriter
 		return
 	}
 	var output *kinesis.GetShardIteratorOutput
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		if payload.ShardIteratorType != kinesis.ShardIteratorTypeLatest {
 			writer.WriteHeader(400)
 			writer.Write([]byte("Only support shard iterator latest"))
@@ -313,7 +313,7 @@ func (handler *KinesisHandler) DescribeHandle(writer http.ResponseWriter, reques
 		return
 	}
 	var output *kinesis.DescribeStreamOutput
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		_, err := handler.GCPClientToTopic(*payload.StreamName, handler.GCPClient).Config(*handler.Context)
 		if err != nil {
 			writer.WriteHeader(400)
@@ -368,7 +368,7 @@ func (handler *KinesisHandler) DeleteStreamHandle(writer http.ResponseWriter, re
 		writer.Write([]byte(fmt.Sprint(err)))
 		return
 	}
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		err := handler.GCPClientToTopic(*payload.StreamName, handler.GCPClient).Delete(*handler.Context)
 		if err != nil {
 			logging.Log.Error("Error Deleting", err)
@@ -417,7 +417,7 @@ func (handler *KinesisHandler) CreateStreamHandle(writer http.ResponseWriter, re
 		writer.Write([]byte(fmt.Sprint(err)))
 		return
 	}
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		_, err := handler.GCPClient.CreateTopic(*handler.Context, *payload.StreamName)
 		if err != nil {
 			logging.Log.Error("Error creating", err)
@@ -479,7 +479,7 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 	gcpShardId := GcpShardId
 	if payload.Data != "" {
 		str, _ := base64.StdEncoding.DecodeString(payload.Data)
-		if handler.GCPClient != nil {
+		if handler.Config.IsSet("gcp_destination_config") {
 			topic := handler.GCPClientToTopic(payload.StreamName, handler.GCPClient)
 			defer topic.Stop()
 			req, err := handler.gcpPublish(topic, payload.StreamName, &pubsub.Message{
@@ -524,7 +524,7 @@ func (handler *KinesisHandler) PublishHandle(writer http.ResponseWriter, request
 			json.NewEncoder(writer).Encode(jsonOutput)
 		}
 	} else if len(payload.Records) > 0 {
-		if handler.GCPClient != nil {
+		if handler.Config.IsSet("gcp_destination_config") {
 			results := make([]GCPPublishResult, len(payload.Records))
 			var wg sync.WaitGroup
 			wg.Add(len(payload.Records))

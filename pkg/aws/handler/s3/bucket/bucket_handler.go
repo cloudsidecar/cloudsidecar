@@ -100,7 +100,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 	if input.MaxKeys != nil {
 		pageSize = int(*input.MaxKeys)
 	}
-	if wrapper.GCPClient != nil {
+	if wrapper.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := wrapper.GCPRequestSetup(request)
@@ -220,7 +220,7 @@ func (wrapper *Handler) ListHandlev2(writer http.ResponseWriter, request *http.R
 	if input.MaxKeys != nil {
 		pageSize = int(*input.MaxKeys)
 	}
-	if wrapper.GCPClient != nil {
+	if wrapper.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := wrapper.GCPRequestSetup(request)
@@ -305,7 +305,7 @@ func (wrapper *Handler) ACLParseInput(r *http.Request) (*s3.GetBucketAclInput, e
 // Handle ACL Request
 func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := wrapper.ACLParseInput(request)
-	if wrapper.GCPClient != nil {
+	if wrapper.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := wrapper.GCPRequestSetup(request)

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
@@ -17,6 +18,12 @@ import (
 	"testing"
 	"time"
 )
+
+func getConfig() *viper.Viper {
+	config := viper.New()
+	config.Set("gcp_destination_config", "meow")
+	return config
+}
 
 func TestHandler_PutParseInputChunked(t *testing.T) {
 	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
@@ -88,6 +95,7 @@ func todo_TestHandler_GetHandle(t *testing.T) {
 			return objectMock
 		},
 		Context: &ctx,
+		Config: getConfig(),
 	}
 	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/boops/mykey")
@@ -144,6 +152,7 @@ func TestHandler_HeadHandle(t *testing.T) {
 			return objectMock
 		},
 		Context: &ctx,
+		Config: getConfig(),
 	}
 	valueMap := map[string]string{"bucket": "boops", "key": "mykey"}
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?list-type=2&prefix=boo&delimiter=%2F&encoding-type=url")

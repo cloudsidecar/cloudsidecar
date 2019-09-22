@@ -186,7 +186,7 @@ func (handler *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 		return
 	}
 	var response *response_type.ListQueuesResponse
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		err := errors.New("unsupported operation")
 		processError(err, writer)
 		return
@@ -224,7 +224,7 @@ func (handler *Handler) CreateHandle(writer http.ResponseWriter, request *http.R
 		return
 	}
 	var response *response_type.CreateQueueResponse
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		id := strings.ReplaceAll(*params.QueueName, "-", "")
 		_, err := handler.GCPClient.CreateTopic(*handler.Context, *params.QueueName)
 		if err != nil {
@@ -296,7 +296,7 @@ func (handler *Handler) PurgeHandle(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	var response *response_type.PurgeQueueResponse
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		err := errors.New("unsupported operation")
 		processError(err, writer)
 		return
@@ -329,7 +329,7 @@ func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.R
 		return
 	}
 	var response *response_type.DeleteQueueResponse
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 
 	} else {
 		_, err := handler.SqsClient.DeleteQueueRequest(params).Send()
@@ -359,7 +359,7 @@ func (handler *Handler) SendHandle(writer http.ResponseWriter, request *http.Req
 		return
 	}
 	var response *response_type.SendMessageResponse
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		pieces := strings.Split(*params.QueueUrl, "/")
 		id := pieces[len(pieces)-1]
 		topic := handler.GCPClientToTopic(id, handler.GCPClient)
@@ -448,7 +448,7 @@ func (handler *Handler) SendBatchHandle(writer http.ResponseWriter, request *htt
 		return
 	}
 	var response *response_type.SendMessageBatchResponse
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		pieces := strings.Split(*params.QueueUrl, "/")
 		id := pieces[len(pieces)-1]
 		topic := handler.GCPClientToTopic(id, handler.GCPClient)
@@ -666,7 +666,7 @@ func (handler *Handler) ReceiveHandle(writer http.ResponseWriter, request *http.
 		return
 	}
 	var response *response_type.ReceiveMessageResponse
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		pieces := strings.Split(*params.QueueUrl, "/")
 		id := pieces[len(pieces)-1]
 		subscription := handler.GCPClient.Subscription(id)
@@ -784,7 +784,7 @@ func (handler *Handler) DeleteMessageHandle(writer http.ResponseWriter, request 
 		return
 	}
 	var response *response_type.DeleteMessageResponse
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		if handler.ToAck[*params.ReceiptHandle] != nil {
 			handler.ToAck[*params.ReceiptHandle] <- true
 		}
@@ -819,7 +819,7 @@ func (handler *Handler) DeleteMessageBatchHandle(writer http.ResponseWriter, req
 		return
 	}
 	var response *response_type.DeleteMessageBatchResponse
-	if handler.GCPClient != nil {
+	if handler.Config.IsSet("gcp_destination_config") {
 		response = &response_type.DeleteMessageBatchResponse{}
 		success := make([]response_type.DeleteMessageBatchResultEntry, 0)
 		for _, entry := range params.Entries {
