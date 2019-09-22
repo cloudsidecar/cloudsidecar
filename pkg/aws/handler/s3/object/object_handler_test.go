@@ -25,7 +25,7 @@ func TestHandler_PutParseInputChunked(t *testing.T) {
 		"%s\r\n%s\r\n%s\r\n%s\r\n%s\r\n",
 		"B;chunk-signature=meowmeowmeow",
 		"thisisten\r\n",
-		"5;chink-signature=mooo",
+		"5;chunk-signature=mooo",
 		"12345",
 		"0;chunk-signature=nope",
 	)
