@@ -22,10 +22,10 @@ jobs:
       - checkout
 
       - run: 
-        name: Install dependencies
-        command: |
-          curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-          dep ensure
+          name: Install dependencies
+          command: |
+            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+            dep ensure
 
       # specify any bash command here prefixed with `run: `
       - run: go get -v -t -d ./...
