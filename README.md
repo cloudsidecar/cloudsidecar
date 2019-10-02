@@ -1,5 +1,7 @@
 # Cloud Sidecar
 
+[![CircleCI](https://circleci.com/gh/lawrencefinn/cloudsidecar/tree/master.svg?style=svg)](https://circleci.com/gh/lawrencefinn/cloudsidecar/tree/master)
+
 ## Introduction
 Cloud Sidecar (CS) is a utility to allow software to be written in a cloud agnostic manner while being able to take advantage
 of the features a specific cloud may offer.  It runs next to your existing application and implelments a common API that
