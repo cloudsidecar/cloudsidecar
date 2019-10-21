@@ -224,7 +224,7 @@ func TestHandler_UploadPartHandle(t *testing.T) {
 		Context: &ctx,
 		Config:  getConfig(),
 	}
-	handler := Handler {
+	handler := Handler{
 		s3Handler,
 		sync.Mutex{},
 	}
@@ -233,17 +233,17 @@ func TestHandler_UploadPartHandle(t *testing.T) {
 	bodyBytes := []byte(bodyString)
 	body := ioutil.NopCloser(bytes.NewReader([]byte(bodyString)))
 	req := &http.Request{
-		URL: testUrl,
+		URL:  testUrl,
 		Body: body,
 	}
-	valueMap := map[string]string{"bucket": "boops", "uploadId" : "123",}
+	valueMap := map[string]string{"bucket": "boops", "uploadId": "123"}
 	req = mux.SetURLVars(req, valueMap)
 	uploaderMock.EXPECT().Write(bodyBytes).Return(len(bodyBytes), nil)
 	uploaderMock.EXPECT().Close().Return(nil)
 	md5Hash := md5.Sum(bodyBytes)
 	uploaderMock.EXPECT().Attrs().Return(&storage.ObjectAttrs{
 		Size: 1234,
-		MD5: md5Hash[:],
+		MD5:  md5Hash[:],
 	})
 	header := make(map[string][]string)
 	writerMock.EXPECT().Header().Return(header).AnyTimes()
