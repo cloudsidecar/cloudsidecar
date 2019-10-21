@@ -456,6 +456,7 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 	defer request.Body.Close()
 	if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
+		logging.Log.Info("Begin PUT request", request.RequestURI)
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := handler.GCPRequestSetup(request)
 		if client != nil {
@@ -472,12 +473,20 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).NewWriter(*handler.Context)
 		_, err = converter.GCPUpload(s3Req, uploader)
-		uploader.Close()
+		uploaderErr := uploader.Close()
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
+		if uploaderErr != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
+			return
+		}
+		attrs := uploader.Attrs()
+		converter.GCSMD5ToEtag(attrs, writer)
+		logging.Log.Info("Finish PUT request", request.RequestURI)
 	} else {
 		logging.LogUsingAWS()
 		uploader := s3manager.NewUploaderWithClient(handler.S3Client)
