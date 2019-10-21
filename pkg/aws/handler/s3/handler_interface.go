@@ -21,6 +21,7 @@ type Handler struct {
 	Config            *viper.Viper
 	GCPClientToBucket func(bucket string, client GCPClient) GCPBucket
 	GCPBucketToObject func(name string, bucket GCPBucket) GCPObject
+	GCPObjectToWriter func(object GCPObject, ctx context.Context) GCPObjectWriter
 	GCPClientPerKey   map[string]GCPClient
 	gcpClientMapLock  sync.Mutex
 	GCPClientPool     map[string][]GCPClient
@@ -48,6 +49,13 @@ type GCPObject interface {
 	NewRangeReader(ctx context.Context, offset, length int64) (r *storage.Reader, err error)
 	CopierFrom(src *storage.ObjectHandle) *storage.Copier
 	ComposerFrom(srcs ...*storage.ObjectHandle) *storage.Composer
+}
+
+type GCPObjectWriter interface {
+	Write(p []byte) (n int, err error)
+	Close() error
+	CloseWithError(err error) error
+	Attrs() *storage.ObjectAttrs
 }
 
 type GCPBucket interface {

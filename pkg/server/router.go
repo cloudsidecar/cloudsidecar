@@ -105,6 +105,9 @@ func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enter
 			},
 			GCPClientPerKey: make(map[string]s3handler.GCPClient),
 			GCPClientPool:   make(map[string][]s3handler.GCPClient),
+			GCPObjectToWriter: func(object s3handler.GCPObject, ctx context.Context) s3handler.GCPObjectWriter {
+				return object.NewWriter(ctx)
+			},
 		}
 		if awsConfig.DestinationGCPConfig != nil {
 			// use GCS

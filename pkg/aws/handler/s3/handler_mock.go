@@ -639,3 +639,83 @@ func (mr *MockHandlerInterfaceMockRecorder) SetS3Client(arg0 interface{}) *gomoc
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetS3Client", reflect.TypeOf((*MockHandlerInterface)(nil).SetS3Client), arg0)
 }
+
+// MockGCPObjectWriter is a mock of GCPObjectWriter interface
+type MockGCPObjectWriter struct {
+	ctrl     *gomock.Controller
+	recorder *MockGCPObjectWriterMockRecorder
+}
+
+// MockGCPObjectWriterMockRecorder is the mock recorder for MockGCPObjectWriter
+type MockGCPObjectWriterMockRecorder struct {
+	mock *MockGCPObjectWriter
+}
+
+// NewMockGCPObjectWriter creates a new mock instance
+func NewMockGCPObjectWriter(ctrl *gomock.Controller) *MockGCPObjectWriter {
+	mock := &MockGCPObjectWriter{ctrl: ctrl}
+	mock.recorder = &MockGCPObjectWriterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use
+func (m *MockGCPObjectWriter) EXPECT() *MockGCPObjectWriterMockRecorder {
+	return m.recorder
+}
+
+// Write mocks base method
+func (m *MockGCPObjectWriter) Write(p []byte) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Write", p)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Write indicates an expected call of Write
+func (mr *MockGCPObjectWriterMockRecorder) Write(p interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockGCPObjectWriter)(nil).Write), p)
+}
+
+// Close mocks base method
+func (m *MockGCPObjectWriter) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close
+func (mr *MockGCPObjectWriterMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockGCPObjectWriter)(nil).Close))
+}
+
+// CloseWithError mocks base method
+func (m *MockGCPObjectWriter) CloseWithError(err error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CloseWithError", err)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CloseWithError indicates an expected call of CloseWithError
+func (mr *MockGCPObjectWriterMockRecorder) CloseWithError(err interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseWithError", reflect.TypeOf((*MockGCPObjectWriter)(nil).CloseWithError), err)
+}
+
+// Attrs mocks base method
+func (m *MockGCPObjectWriter) Attrs() *storage.ObjectAttrs {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Attrs")
+	ret0, _ := ret[0].(*storage.ObjectAttrs)
+	return ret0
+}
+
+// Attrs indicates an expected call of Attrs
+func (mr *MockGCPObjectWriterMockRecorder) Attrs() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Attrs", reflect.TypeOf((*MockGCPObjectWriter)(nil).Attrs))
+}

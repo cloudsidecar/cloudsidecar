@@ -184,6 +184,13 @@ func GCSAttrToCombine(input *storage.ObjectAttrs) *response_type.CompleteMultipa
 	}
 }
 
+func GCSMD5ToEtag(input *storage.ObjectAttrs, writer http.ResponseWriter) {
+	if len(input.MD5) > 0 {
+		other := MD5toEtag(input.MD5)
+		writer.Header().Set("ETag", other)
+	}
+}
+
 func GCSAttrToHeaders(input *storage.ObjectAttrs, writer http.ResponseWriter) {
 	utc, _ := time.LoadLocation("UTC")
 	writer.Header().Set("Content-Length", strconv.FormatInt(input.Size, 10))
@@ -193,10 +200,7 @@ func GCSAttrToHeaders(input *storage.ObjectAttrs, writer http.ResponseWriter) {
 	if input.ContentType != "" {
 		writer.Header().Set("Cache-Type", input.ContentType)
 	}
-	if len(input.MD5) > 0 {
-		other := MD5toEtag(input.MD5)
-		writer.Header().Set("ETag", other)
-	}
+	GCSMD5ToEtag(input, writer)
 	lastMod := input.Updated.In(utc).Format(time.RFC1123)
 	lastMod = strings.Replace(lastMod, "UTC", "GMT", 1)
 	writer.Header().Set("Last-Modified", lastMod)

@@ -274,26 +274,27 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 		}
 		key := partFileName(*s3Req.Key, *s3Req.PartNumber)
 		bucket := handler.GCPClientToBucket(*s3Req.Bucket, client)
-		uploader := handler.GCPBucketToObject(key, bucket).NewWriter(*handler.Context)
+		obj := handler.GCPBucketToObject(key, bucket)
+		uploader := handler.GCPObjectToWriter(obj, *handler.Context)
 		gReq, _ := handler.PutParseInput(request)
 		_, err = converter.GCPUpload(gReq, uploader)
-		uploader.Close()
+		closeErr := uploader.Close()
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
-		attrs, err := handler.getGCPAttrsWithRetry(handler.GCPBucketToObject(key, bucket))
-		if err != nil {
+		if closeErr != nil {
 			writer.WriteHeader(400)
 			logging.Log.Error("Error %s %s %s %s", request.RequestURI, bucket, key, err)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
-		converter.GCSAttrToHeaders(attrs, writer)
+		attrs := uploader.Attrs()
+		converter.GCSMD5ToEtag(attrs, writer)
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
-		logging.Log.Info(path)
+		logging.Log.Info("Temp upload parts file path " + path)
 		// Add part file to multipart temporary file
 		handler.fileMutex.Lock()
 		f, fileErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
