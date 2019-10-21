@@ -274,26 +274,27 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 		}
 		key := partFileName(*s3Req.Key, *s3Req.PartNumber)
 		bucket := handler.GCPClientToBucket(*s3Req.Bucket, client)
-		uploader := handler.GCPBucketToObject(key, bucket).NewWriter(*handler.Context)
+		obj := handler.GCPBucketToObject(key, bucket)
+		uploader := handler.GCPObjectToWriter(obj, *handler.Context)
 		gReq, _ := handler.PutParseInput(request)
 		_, err = converter.GCPUpload(gReq, uploader)
-		uploader.Close()
+		closeErr := uploader.Close()
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
-		attrs, err := handler.getGCPAttrsWithRetry(handler.GCPBucketToObject(key, bucket))
-		if err != nil {
+		if closeErr != nil {
 			writer.WriteHeader(400)
 			logging.Log.Error("Error %s %s %s %s", request.RequestURI, bucket, key, err)
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
-		converter.GCSAttrToHeaders(attrs, writer)
+		attrs := uploader.Attrs()
+		converter.GCSMD5ToEtag(attrs, writer)
 		path := fmt.Sprintf("%s/%s", handler.Config.GetString("gcp_destination_config.gcs_config.multipart_db_directory"), *s3Req.UploadId)
-		logging.Log.Info(path)
+		logging.Log.Info("Temp upload parts file path " + path)
 		// Add part file to multipart temporary file
 		handler.fileMutex.Lock()
 		f, fileErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
@@ -455,6 +456,7 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 	defer request.Body.Close()
 	if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
+		logging.Log.Info("Begin PUT request", request.RequestURI)
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := handler.GCPRequestSetup(request)
 		if client != nil {
@@ -471,12 +473,20 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 		bucketHandle := handler.GCPClientToBucket(bucket, client)
 		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).NewWriter(*handler.Context)
 		_, err = converter.GCPUpload(s3Req, uploader)
-		uploader.Close()
+		uploaderErr := uploader.Close()
 		if err != nil {
 			writer.WriteHeader(404)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
+		if uploaderErr != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
+			return
+		}
+		attrs := uploader.Attrs()
+		converter.GCSMD5ToEtag(attrs, writer)
+		logging.Log.Info("Finish PUT request", request.RequestURI)
 	} else {
 		logging.LogUsingAWS()
 		uploader := s3manager.NewUploaderWithClient(handler.S3Client)

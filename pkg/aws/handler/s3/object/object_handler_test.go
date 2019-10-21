@@ -6,6 +6,7 @@ import (
 	s3_handler "cloudsidecar/pkg/aws/handler/s3"
 	"cloudsidecar/pkg/mock"
 	"context"
+	"crypto/md5"
 	"fmt"
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -22,6 +24,7 @@ import (
 func getConfig() *viper.Viper {
 	config := viper.New()
 	config.Set("gcp_destination_config", "meow")
+	config.Set("gcp_destination_config.gcs_config.multipart_db_directory", "/tmp")
 	return config
 }
 
@@ -192,4 +195,61 @@ func TestHandler_HeadParseInput(t *testing.T) {
 	if *result.Key != "mykey" {
 		t.Error("Key should be mykey")
 	}
+}
+
+func TestHandler_UploadPartHandle(t *testing.T) {
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	bucketMock := s3_handler.NewMockGCPBucket(ctrl)
+	clientMock := s3_handler.NewMockGCPClient(ctrl)
+	objectMock := s3_handler.NewMockGCPObject(ctrl)
+	writerMock := mock.NewMockResponseWriter(ctrl)
+	uploaderMock := s3_handler.NewMockGCPObjectWriter(ctrl)
+	ctx := context.Background()
+	s3Handler := &s3_handler.Handler{
+		GCPClient: func() (s3_handler.GCPClient, error) {
+			return clientMock, nil
+		},
+		GCPClientPool: make(map[string][]s3_handler.GCPClient),
+		GCPClientToBucket: func(bucket string, client s3_handler.GCPClient) s3_handler.GCPBucket {
+			return bucketMock
+		},
+		GCPBucketToObject: func(name string, bucket s3_handler.GCPBucket) s3_handler.GCPObject {
+			return objectMock
+		},
+		GCPObjectToWriter: func(object s3_handler.GCPObject, ctx context.Context) s3_handler.GCPObjectWriter {
+			return uploaderMock
+		},
+		Context: &ctx,
+		Config:  getConfig(),
+	}
+	handler := Handler{
+		s3Handler,
+		sync.Mutex{},
+	}
+	testUrl, _ := url.ParseRequestURI("http://localhost:3450/beh?uploadId=123")
+	bodyString := "bleh bleh bleh"
+	bodyBytes := []byte(bodyString)
+	body := ioutil.NopCloser(bytes.NewReader([]byte(bodyString)))
+	req := &http.Request{
+		URL:  testUrl,
+		Body: body,
+	}
+	valueMap := map[string]string{"bucket": "boops", "uploadId": "123"}
+	req = mux.SetURLVars(req, valueMap)
+	uploaderMock.EXPECT().Write(bodyBytes).Return(len(bodyBytes), nil)
+	uploaderMock.EXPECT().Close().Return(nil)
+	md5Hash := md5.Sum(bodyBytes)
+	uploaderMock.EXPECT().Attrs().Return(&storage.ObjectAttrs{
+		Size: 1234,
+		MD5:  md5Hash[:],
+	})
+	header := make(map[string][]string)
+	writerMock.EXPECT().Header().Return(header).AnyTimes()
+	writerMock.EXPECT().WriteHeader(200)
+	writerMock.EXPECT().Write([]byte{})
+	handler.UploadPartHandle(writerMock, req)
+	assert.Equal(t, header["Etag"][0], "3bde84208a4a41929d903d93120bb9c5")
+	assert.Empty(t, header["Content-Length"])
 }
