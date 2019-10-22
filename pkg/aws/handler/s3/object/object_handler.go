@@ -98,6 +98,51 @@ func writeInternalError(writer http.ResponseWriter, message string) {
 	writer.Write(output)
 }
 
+func filesAsString(objects []*storage.ObjectHandle) string {
+	names := make([]string, len(objects))
+	for i, obj := range objects {
+		names[i] = obj.ObjectName()
+	}
+	return strings.Join(names, ", ")
+}
+
+func (handler *Handler) doCombine(bucket s3_handler.GCPBucket, target string, objects []*storage.ObjectHandle) (*storage.ObjectAttrs, error) {
+	objectCount := len(objects)
+	var toCombine []*storage.ObjectHandle
+	maxSize := 32
+	if objectCount > maxSize {
+		toCombine = make([]*storage.ObjectHandle, 2)
+		pos := objectCount / 2
+		firstTarget := fmt.Sprintf("%s_1", target)
+		firstHandle, err := handler.doCombine(bucket, firstTarget, objects[:pos])
+		if err != nil {
+			return nil, err
+		}
+		toCombine[0] = bucket.Object(firstHandle.Name)
+
+		secondTarget := fmt.Sprintf("%s_2", target)
+		secondHandle, err := handler.doCombine(bucket, secondTarget, objects[pos:])
+		if err != nil {
+			return nil, err
+		}
+		toCombine[1] = bucket.Object(secondHandle.Name)
+	} else {
+		toCombine = objects
+	}
+	logging.Log.Debugf("Combining to %s %v", target, filesAsString(toCombine))
+	gResp, err := handler.GCPBucketToObject(target, bucket).ComposerFrom(toCombine...).Run(*handler.Context)
+	if err != nil {
+		return nil, err
+	}
+	for _, object := range toCombine {
+		logging.Log.Debugf("Deleting %s", object.ObjectName())
+		if deleteErr := handler.deleteGCPObjectWithRetry(object); deleteErr != nil {
+			return nil, deleteErr
+		}
+	}
+	return gResp, nil
+}
+
 // Handle completing multipart upload
 func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, request *http.Request) {
 	s3Req, _ := handler.CompleteMultiPartParseInput(request)
@@ -141,7 +186,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		}
 
 		// Join pieces
-		gResp, err := handler.GCPBucketToObject(*s3Req.Key, bucket).ComposerFrom(objects...).Run(*handler.Context)
+		gResp, err := handler.doCombine(bucket, *s3Req.Key, objects)
 		if err != nil {
 			writer.WriteHeader(400)
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
@@ -149,15 +194,6 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 			return
 		}
 		resp = converter.GCSAttrToCombine(gResp)
-		for _, object := range objects {
-			deleteErr := handler.deleteGCPObjectWithRetry(object)
-			if deleteErr != nil {
-				writer.WriteHeader(400)
-				logging.Log.Error("Error %s %s", request.RequestURI, err)
-				writeInternalError(writer, err.Error())
-				return
-			}
-		}
 		defer os.Remove(path)
 		logging.Log.Infof("Finished multipart upload {}", *s3Req.UploadId)
 	} else {
