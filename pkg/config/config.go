@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	AwsConfigs map[string]AWSConfig        `mapstructure:"aws_configs"`
-	GcpConfigs map[string]GCPConfig        `mapstructure:"gcp_configs"`
-	Middleware map[string]MiddlewareConfig `mapstructure:"middleware"`
-	Logger     *LogConfig                  `mapstructure:"logger"`
+	AwsConfigs       map[string]AWSConfig        `mapstructure:"aws_configs"`
+	GcpConfigs       map[string]GCPConfig        `mapstructure:"gcp_configs"`
+	Middleware       map[string]MiddlewareConfig `mapstructure:"middleware"`
+	Logger           *LogConfig                  `mapstructure:"logger"`
+	PanicOnBindError bool                        `mapstructure:"panic_on_bind_error"`
 }
 
 type MiddlewareConfig struct {

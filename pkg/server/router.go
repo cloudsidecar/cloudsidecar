@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/viper"
 	"net/http"
 	"plugin"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -287,7 +288,11 @@ func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSyst
 				serverWaitGroup.Add(1)
 				servers[key] = srv
 				go func() {
-					logging.Log.Error("", srv.ListenAndServe())
+					listenErr := srv.ListenAndServe()
+					logging.Log.Error("", listenErr)
+					if (*config).PanicOnBindError && strings.Contains(listenErr.Error(), "bind: address already in use") {
+						panic("Could not bind, exiting")
+					}
 					awsHandler.Shutdown()
 					serverWaitGroup.Done()
 				}()

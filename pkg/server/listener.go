@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-const Version = "0.0.14"
+const Version = "0.0.15"
 
 // Handlers map
 var awsHandlers map[string]awshandler.HandlerInterface
