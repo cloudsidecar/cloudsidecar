@@ -53,6 +53,7 @@ type GCPDestinationConfig struct {
 type GCSConfig struct {
 	BucketRename         map[string]string `mapstructure:"bucket_rename"`
 	MultipartDBDirectory string            `mapstructure:"multipart_db_directory"`
+	MultipartPrefix      string            `mapstructure:"multipart_temp_file_prefix"`
 }
 
 type GCPDatastoreConfig struct {
