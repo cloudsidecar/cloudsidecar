@@ -180,7 +180,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		bucket := handler.GCPClientToBucket(*s3Req.Bucket, client)
 		for _, part := range s3Req.MultipartUpload.Parts {
 			partNumber := *part.PartNumber
-			key := partFileName(*s3Req.Key, partNumber, handler.Config.GetString("gcp_destination_config.multipart_temp_file_prefix"))
+			key := partFileName(*s3Req.Key, partNumber, handler.Config.GetString("gcp_destination_config.gcs_config.multipart_temp_file_prefix"))
 			logging.Log.Info("Part number ", partNumber, " ", key)
 			objects = append(objects, bucket.Object(key))
 		}
@@ -313,7 +313,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
-		key := partFileName(*s3Req.Key, *s3Req.PartNumber, handler.Config.GetString("gcp_destination_config.multipart_temp_file_prefix"))
+		key := partFileName(*s3Req.Key, *s3Req.PartNumber, handler.Config.GetString("gcp_destination_config.gcs_config.multipart_temp_file_prefix"))
 		bucket := handler.GCPClientToBucket(*s3Req.Bucket, client)
 		obj := handler.GCPBucketToObject(key, bucket)
 		uploader := handler.GCPObjectToWriter(obj, *handler.Context)
