@@ -198,7 +198,6 @@ func TestHandler_HeadParseInput(t *testing.T) {
 }
 
 func TestHandler_UploadPartHandle(t *testing.T) {
-
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	bucketMock := s3_handler.NewMockGCPBucket(ctrl)
@@ -252,4 +251,13 @@ func TestHandler_UploadPartHandle(t *testing.T) {
 	handler.UploadPartHandle(writerMock, req)
 	assert.Equal(t, header["Etag"][0], "3bde84208a4a41929d903d93120bb9c5")
 	assert.Empty(t, header["Content-Length"])
+}
+
+func TestHandler_partFileName(t *testing.T) {
+	key := "bleh/meh/larry1.parquet"
+	noPrefix := partFileName(key, 0, "")
+	assert.Equal(t, noPrefix, key+"-part-0")
+
+	withPrefix := partFileName(key, 0, "mytempplace")
+	assert.Equal(t, withPrefix, "mytempplace/bleh/meh/larry1.parquet-part-0")
 }
