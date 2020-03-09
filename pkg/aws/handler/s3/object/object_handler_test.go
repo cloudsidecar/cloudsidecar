@@ -256,8 +256,8 @@ func TestHandler_UploadPartHandle(t *testing.T) {
 func TestHandler_partFileName(t *testing.T) {
 	key := "bleh/meh/larry1.parquet"
 	noPrefix := partFileName(key, 0, "")
-	assert.Equal(t, noPrefix, key + "-part-0")
+	assert.Equal(t, noPrefix, key+"-part-0")
 
-	withPrefix := partFileName(key, 0, "_")
-	assert.Equal(t, withPrefix, "bleh/meh/_larry1.parquet-part-0")
+	withPrefix := partFileName(key, 0, "mytempplace")
+	assert.Equal(t, withPrefix, "mytempplace/bleh/meh/larry1.parquet-part-0")
 }

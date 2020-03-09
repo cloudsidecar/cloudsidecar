@@ -58,6 +58,8 @@ type Object interface {
 	Register(mux *mux.Router)
 }
 
+var multipartUploadPathPrefix = "gcp_destination_config.gcs_config.multipart_temp_path_prefix"
+
 // Register all HTTP handlers
 func (handler *Handler) Register(mux *mux.Router) {
 	keyFromUrl := handler.Config.Get("gcp_destination_config.key_from_url")
@@ -180,7 +182,7 @@ func (handler *Handler) CompleteMultiPartHandle(writer http.ResponseWriter, requ
 		bucket := handler.GCPClientToBucket(*s3Req.Bucket, client)
 		for _, part := range s3Req.MultipartUpload.Parts {
 			partNumber := *part.PartNumber
-			key := partFileName(*s3Req.Key, partNumber, handler.Config.GetString("gcp_destination_config.gcs_config.multipart_temp_file_prefix"))
+			key := partFileName(*s3Req.Key, partNumber, handler.Config.GetString(multipartUploadPathPrefix))
 			logging.Log.Info("Part number ", partNumber, " ", key)
 			objects = append(objects, bucket.Object(key))
 		}
@@ -254,11 +256,12 @@ func (handler *Handler) CompleteMultiPartParseInput(r *http.Request) (*s3.Comple
 	return s3Req, nil
 }
 
-func partFileName(key string, part int64, prefix string) string {
-	if prefix != "" {
-		keyParts := strings.Split(key, "/")
-		keyParts[len(keyParts) - 1] = prefix + keyParts[len(keyParts) - 1]
-		key = strings.Join(keyParts, "/")
+func partFileName(key string, part int64, pathPrefix string) string {
+	if pathPrefix != "" {
+		if !strings.HasSuffix(pathPrefix, "/") {
+			pathPrefix = pathPrefix + "/"
+		}
+		key = pathPrefix + key
 	}
 	return fmt.Sprintf("%s-part-%d", key, part)
 }
@@ -313,7 +316,7 @@ func (handler *Handler) UploadPartHandle(writer http.ResponseWriter, request *ht
 			writer.Write([]byte(string(fmt.Sprint(err))))
 			return
 		}
-		key := partFileName(*s3Req.Key, *s3Req.PartNumber, handler.Config.GetString("gcp_destination_config.gcs_config.multipart_temp_file_prefix"))
+		key := partFileName(*s3Req.Key, *s3Req.PartNumber, handler.Config.GetString(multipartUploadPathPrefix))
 		bucket := handler.GCPClientToBucket(*s3Req.Bucket, client)
 		obj := handler.GCPBucketToObject(key, bucket)
 		uploader := handler.GCPObjectToWriter(obj, *handler.Context)
