@@ -35,6 +35,7 @@ type Handler struct {
 
 func NewHandler(config *viper.Viper) Handler {
 	return Handler{
+		Config: config,
 		GCPClientToTopic: func(topic string, client kinesis.GCPClient) kinesis.GCPTopic {
 			return client.Topic(topic)
 		},
