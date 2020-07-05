@@ -1,7 +1,6 @@
 package server
 
 import (
-	"cloud.google.com/go/pubsub"
 	awshandler "cloudsidecar/pkg/aws/handler"
 	kinesishandler "cloudsidecar/pkg/aws/handler/kinesis"
 	s3handler "cloudsidecar/pkg/aws/handler/s3"
@@ -81,34 +80,28 @@ func (wrapper *RouteWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	router.ServeHTTP(w, r)
 }
 
+func createAWSConfigs(awsConfig *conf.AWSConfig) aws.Config {
+	configs := defaults.Config()
+	creds := aws.NewStaticCredentialsProvider(awsConfig.DestinationAWSConfig.AccessKeyId, awsConfig.DestinationAWSConfig.SecretAccessKey, "")
+	configs.Credentials = creds
+	configs.Region = endpoints.UsEast1RegionID
+	return configs
+}
+
 // Create a handler from config
 func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enterprise.Enterprise, serverWaitGroup *sync.WaitGroup) (handler awshandler.HandlerInterface, router *mux.Router, toListen bool) {
 	var awsHandler awshandler.HandlerInterface
 	toListen = true
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware)
-	configs := defaults.Config()
-	creds := aws.NewStaticCredentialsProvider(awsConfig.DestinationAWSConfig.AccessKeyId, awsConfig.DestinationAWSConfig.SecretAccessKey, "")
-	configs.Credentials = creds
-	configs.Region = endpoints.UsEast1RegionID
 	ctx := context.Background()
 	if awsConfig.ServiceType == "s3" {
-		svc := s3.New(configs)
 		// set up generic handler for s3
-		handler := s3handler.Handler{
-			S3Client: svc,
-			Config:   viper.Sub(fmt.Sprint("aws_configs.", key)),
-			GCPClientToBucket: func(bucket string, client s3handler.GCPClient) s3handler.GCPBucket {
-				return client.Bucket(bucket)
-			},
-			GCPBucketToObject: func(name string, bucket s3handler.GCPBucket) s3handler.GCPObject {
-				return bucket.Object(name)
-			},
-			GCPClientPerKey: make(map[string]s3handler.GCPClient),
-			GCPClientPool:   make(map[string][]s3handler.GCPClient),
-			GCPObjectToWriter: func(object s3handler.GCPObject, ctx context.Context) s3handler.GCPObjectWriter {
-				return object.NewWriter(ctx)
-			},
+		handler := s3handler.NewHandler(viper.Sub(fmt.Sprint("aws_configs.", key)))
+		if awsConfig.DestinationAWSConfig != nil {
+			configs := createAWSConfigs(awsConfig)
+			svc := s3.New(configs)
+			handler.S3Client = svc
 		}
 		if awsConfig.DestinationGCPConfig != nil {
 			// use GCS
@@ -138,16 +131,11 @@ func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enter
 		bucketHandler.Register(r)
 		objectHandler.Register(r)
 	} else if awsConfig.ServiceType == "kinesis" {
-		svc := kinesis.New(configs)
-		handler := kinesishandler.Handler{
-			KinesisClient: svc,
-			Config:        viper.Sub(fmt.Sprint("aws_configs.", key)),
-			GCPClientToTopic: func(topic string, client kinesishandler.GCPClient) kinesishandler.GCPTopic {
-				return client.Topic(topic)
-			},
-			GCPResultWrapper: func(result *pubsub.PublishResult) kinesishandler.GCPPublishResult {
-				return result
-			},
+		handler := kinesishandler.NewHandler(viper.Sub(fmt.Sprint("aws_configs.", key)))
+		if awsConfig.DestinationAWSConfig != nil {
+			configs := createAWSConfigs(awsConfig)
+			svc := kinesis.New(configs)
+			handler.KinesisClient = svc
 		}
 		if awsConfig.DestinationGCPConfig != nil {
 			// use pubsub
@@ -171,17 +159,11 @@ func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enter
 		wrappedHandler := kinesishandler.New(&handler)
 		wrappedHandler.Register(r)
 	} else if awsConfig.ServiceType == "sqs" {
-		svc := sqs.New(configs)
-		handler := csSqs.Handler{
-			SqsClient: svc,
-			Config:    viper.Sub(fmt.Sprint("aws_configs.", key)),
-			GCPClientToTopic: func(topic string, client kinesishandler.GCPClient) kinesishandler.GCPTopic {
-				return client.Topic(topic)
-			},
-			GCPResultWrapper: func(result *pubsub.PublishResult) kinesishandler.GCPPublishResult {
-				return result
-			},
-			ToAck: make(map[string]chan bool),
+		handler := csSqs.NewHandler(viper.Sub(fmt.Sprint("aws_configs.", key)),)
+		if awsConfig.DestinationAWSConfig != nil {
+			configs := createAWSConfigs(awsConfig)
+			svc := sqs.New(configs)
+			handler.SqsClient = svc
 		}
 		if awsConfig.DestinationGCPConfig != nil {
 			// use pubsub

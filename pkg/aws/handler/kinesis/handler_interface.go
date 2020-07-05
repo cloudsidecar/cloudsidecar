@@ -18,6 +18,18 @@ type Handler struct {
 	Config           *viper.Viper
 }
 
+func NewHandler(config *viper.Viper) Handler {
+	return Handler{
+		Config: config,
+		GCPClientToTopic: func(topic string, client GCPClient) GCPTopic {
+			return client.Topic(topic)
+		},
+		GCPResultWrapper: func(result *pubsub.PublishResult) GCPPublishResult {
+			return result
+		},
+	}
+}
+
 type HandlerInterface interface {
 	GetKinesisClient() *kinesis.Kinesis
 	GetGCPClient() GCPClient

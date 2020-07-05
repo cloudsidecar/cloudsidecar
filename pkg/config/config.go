@@ -42,7 +42,6 @@ type GCPDestinationConfig struct {
 	Name            string              `mapstructure:"name"`
 	Project         string              `mapstructure:"project"`
 	Instance        string              `mapstructure:"instance"`
-	IsBigTable      bool                `mapstructure:"is_bigtable"`
 	GCSConfig       *GCSConfig          `mapstructure:"gcs_config"`
 	DatastoreConfig *GCPDatastoreConfig `mapstructure:"datastore_config"`
 	KeyFileLocation *string             `mapstructure:"key_file_location"`

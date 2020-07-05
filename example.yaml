@@ -31,8 +31,11 @@ aws_configs:
     gcp_destination_config:
       name: "silly"
       key_file_location: "/etc/sidecar-test.json"
+#      key_from_url: true # pulls the key from url
+#      raw_key: "{some json}" # raw key
       gcs_config:
         multipart_db_directory: "/tmp/"
+        multipart_temp_path_prefix: "_tmp" # where to store parts before merging
         bucket_rename:
           test: "renamed_bucket"
           cat__DOT__hat: "cathat"
@@ -47,9 +50,9 @@ aws_configs:
       name: "silly"
       project: "sidecar-test"
       key_file_location: "/etc/sidecar-test.json"
-  dyn:
-    service_type: "dynamo"
-    port: 3452
+  sqs:
+    service_type: "sqs"
+    port: 3460
     aws_destination_config:
       name: "bleh"
       access_key_id: "my_key"
@@ -57,8 +60,7 @@ aws_configs:
     gcp_destination_config:
       name: "silly"
       project: "sidecar-test"
-      instance: "sidecar"
-      datastore_config:
-        table_key_map:
-          step_table : "step_id"
       key_file_location: "/etc/sidecar-test.json"
+      pub_sub_config:
+        read_timeout: "10s"
+panic_on_bind_error: true        
