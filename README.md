@@ -75,7 +75,7 @@ Just run clone and run `dep ensure` to get dependencies. run `go build main.go` 
 Take a look at example.yaml
 
 ## Run
-`./main example.conf`
+`./main --config=/etc/cloudsidecar/example.conf` to use a single config file, or `./main --config-dir=/etc/sidecar/conf.d` to load all config files in directory
 
 ## Building
 The version is stored in `pkg/server/listener.go`.  To build run `./build.sh`, which utilizes the version mentioned in the listener.go file.

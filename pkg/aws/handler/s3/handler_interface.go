@@ -28,6 +28,23 @@ type Handler struct {
 	gcpClientPoolLock sync.Mutex
 }
 
+func NewHandler(config *viper.Viper) Handler {
+	return Handler {
+		Config: config,
+		GCPClientToBucket: func(bucket string, client GCPClient) GCPBucket {
+			return client.Bucket(bucket)
+		},
+		GCPBucketToObject: func(name string, bucket GCPBucket) GCPObject {
+			return bucket.Object(name)
+		},
+		GCPClientPerKey: make(map[string]GCPClient),
+		GCPClientPool:   make(map[string][]GCPClient),
+		GCPObjectToWriter: func(object GCPObject, ctx context.Context) GCPObjectWriter {
+			return object.NewWriter(ctx)
+		},
+	}
+}
+
 type GCPClient interface {
 	Bucket(name string) *storage.BucketHandle
 	Close() error

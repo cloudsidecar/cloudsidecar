@@ -33,6 +33,18 @@ type Handler struct {
 	ToAck            map[string]chan bool
 }
 
+func NewHandler(config *viper.Viper) Handler {
+	return Handler{
+		GCPClientToTopic: func(topic string, client kinesis.GCPClient) kinesis.GCPTopic {
+			return client.Topic(topic)
+		},
+		GCPResultWrapper: func(result *pubsub.PublishResult) kinesis.GCPPublishResult {
+			return result
+		},
+		ToAck: make(map[string]chan bool),
+	}
+}
+
 type HandlerInterface interface {
 	GetSqsClient() *sqs.SQS
 	GetGCPClient() kinesis.GCPClient
