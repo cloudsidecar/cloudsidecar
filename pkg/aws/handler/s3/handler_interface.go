@@ -29,7 +29,7 @@ type Handler struct {
 }
 
 func NewHandler(config *viper.Viper) Handler {
-	return Handler {
+	return Handler{
 		Config: config,
 		GCPClientToBucket: func(bucket string, client GCPClient) GCPBucket {
 			return client.Bucket(bucket)

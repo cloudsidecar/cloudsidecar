@@ -159,7 +159,7 @@ func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enter
 		wrappedHandler := kinesishandler.New(&handler)
 		wrappedHandler.Register(r)
 	} else if awsConfig.ServiceType == "sqs" {
-		handler := csSqs.NewHandler(viper.Sub(fmt.Sprint("aws_configs.", key)),)
+		handler := csSqs.NewHandler(viper.Sub(fmt.Sprint("aws_configs.", key)))
 		if awsConfig.DestinationAWSConfig != nil {
 			configs := createAWSConfigs(awsConfig)
 			svc := sqs.New(configs)
