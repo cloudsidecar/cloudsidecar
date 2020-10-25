@@ -28,6 +28,7 @@ type Handler struct {
 	GCPClientToTopic func(topic string, client kinesis.GCPClient) kinesis.GCPTopic
 	GCPResultWrapper func(result *pubsub.PublishResult) kinesis.GCPPublishResult
 	GCPKMSClient     *kms.KeyManagementClient
+	GCPClientToSubscription func(client kinesis.GCPClient, id string)
 	Context          *context.Context
 	Config           *viper.Viper
 	ToAck            map[string]chan bool
