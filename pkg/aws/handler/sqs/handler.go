@@ -234,6 +234,10 @@ func (handler *Handler) ListHandleParseInput(r *http.Request) (*sqs.ListQueuesIn
 	}, nil
 }
 
+func (handler *Handler) createURL(queueName string) string {
+	return fmt.Sprintf("http://%s:%d/%s", handler.Config.GetString("hostname"), handler.Config.GetInt("port"), queueName)
+}
+
 func (handler *Handler) CreateHandle(writer http.ResponseWriter, request *http.Request) {
 	params, err := handler.CreateHandleParseInput(request)
 	if err != nil {
@@ -272,18 +276,18 @@ func (handler *Handler) CreateHandle(writer http.ResponseWriter, request *http.R
 		}
 		response = &response_type.CreateQueueResponse{
 			CreateQueueResult: response_type.QueueUrls{
-				QueueUrl: []string{fmt.Sprintf("http://%s:%d/%s", handler.Config.GetString("hostname"), handler.Config.GetInt("port"), *params.QueueName)},
+				QueueUrl: []string{handler.createURL(*params.QueueName)},
 			},
 			XmlNS: response_type.XmlNs,
 		}
 	} else {
-		resp, err := handler.SqsClient.CreateQueueRequest(params).Send()
+		_, err := handler.SqsClient.CreateQueueRequest(params).Send()
 		if err != nil {
 			logging.Log.Errorf("Error creating queue AWS %s", err)
 			processError(err, writer)
 			return
 		}
-		urls := []string{*resp.QueueUrl}
+		urls := []string{handler.createURL(*params.QueueName)}
 		response = &response_type.CreateQueueResponse{
 			CreateQueueResult: response_type.QueueUrls{
 				QueueUrl: urls,
@@ -413,6 +417,16 @@ func (handler *Handler) SendHandle(writer http.ResponseWriter, request *http.Req
 			},
 		}
 	} else {
+		getUrl, err := handler.SqsClient.GetQueueUrlRequest(&sqs.GetQueueUrlInput{
+			QueueName: params.QueueUrl,
+		}).Send()
+		if err != nil {
+			logging.Log.Errorf("Error getting url for AWS %s %s", *params.QueueUrl, err)
+			processError(err, writer)
+			return
+		}
+		logging.Log.Infof("Booya %s", *getUrl.QueueUrl)
+		params.QueueUrl = getUrl.QueueUrl
 		resp, err := handler.SqsClient.SendMessageRequest(params).Send()
 		if err != nil {
 			logging.Log.Errorf("Error sending AWS %s", err)
@@ -636,6 +650,7 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 			data, err := handler.tryToDecrypt(topic, message.Data)
 			if err != nil {
 				errChan <- err
+				message.Nack()
 				cancelFunc()
 				cancelFunc1()
 				return
@@ -644,13 +659,15 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 			md5OfBody := fmt.Sprintf("%x", md5.Sum(data))
 			logging.Log.Debugf("Need to ack %s", message.ID)
 			handler.ToAck[message.ID] = make(chan bool)
-			lock.Lock()
 			if !continueReading {
 				delete(handler.ToAck, message.ID)
 				logging.Log.Debugf("Should not continue reading (receive window timeout)")
 				message.Nack()
+				cancelFunc()
+				cancelFunc1()
 				return
 			}
+			lock.Lock()
 			datas = append(datas, response_type.SqsMessage{
 				MessageId:     &message.ID,
 				ReceiptHandle: &message.ID,
@@ -658,11 +675,11 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 				Body:          &dataString,
 			})
 			receivedCount++
+			lock.Unlock()
 			if receivedCount >= subscription.ReceiveSettings.MaxOutstandingMessages {
 				logging.Log.Debugf("Received all")
 				receivedAll <- datas
 			}
-			lock.Unlock()
 			logging.Log.Debugf("Entering select")
 			select {
 			case isAck := <-handler.ToAck[message.ID]:
@@ -684,6 +701,8 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 				delete(handler.ToAck, message.ID)
 				logging.Log.Debugf("Timeout while waiting for acks")
 				message.Nack()
+				cancelFunc()
+				cancelFunc1()
 				return
 			}
 		})
