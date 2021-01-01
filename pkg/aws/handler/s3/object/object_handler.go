@@ -525,7 +525,7 @@ func (handler *Handler) PutHandle(writer http.ResponseWriter, request *http.Requ
 		}
 		if uploaderErr != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s %s", request.RequestURI, err)
+			logging.Log.Error("Error %s %s", request.RequestURI, uploaderErr)
 			return
 		}
 		attrs := uploader.Attrs()

@@ -19,6 +19,8 @@ import (
 func getConfig() *viper.Viper {
 	config := viper.New()
 	config.Set("gcp_destination_config", "meow")
+	config.Set("hostname", "localhost")
+	config.Set("port", 3460)
 	return config
 }
 
@@ -49,7 +51,7 @@ func TestHandler_CreateHandle(t *testing.T) {
 	handler.GCPClient = mockGcpClient
 	handler.Context = &ctx
 	writerMock.EXPECT().Write([]byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"))
-	writerMock.EXPECT().Write([]byte("<CreateQueueResponse xmlns=\"http://www.w3.org/2001/XMLSchema-instance\"><CreateQueueResult><QueueUrl>https://sqs/myQueue</QueueUrl></CreateQueueResult></CreateQueueResponse>"))
+	writerMock.EXPECT().Write([]byte("<CreateQueueResponse xmlns=\"http://www.w3.org/2001/XMLSchema-instance\"><CreateQueueResult><QueueUrl>http://localhost:3460/myQueue</QueueUrl></CreateQueueResult></CreateQueueResponse>"))
 	handler.CreateHandle(writerMock, req)
 }
 

@@ -128,6 +128,7 @@ func New() *Handler {
 
 func (handler *Handler) Register(mux *mux.Router) {
 	mux.HandleFunc("/", handler.Handle).Methods("POST")
+	mux.HandleFunc("/{subscription}", handler.Handle).Methods("POST")
 }
 
 func (handler *Handler) Handle(writer http.ResponseWriter, request *http.Request) {
@@ -152,6 +153,8 @@ func (handler *Handler) Handle(writer http.ResponseWriter, request *http.Request
 		handler.DeleteMessageBatchHandle(writer, request)
 	} else if action == "SendMessageBatch" {
 		handler.SendBatchHandle(writer, request)
+	} else {
+		processError(errors.New("Invalid function " + action), writer)
 	}
 }
 
@@ -242,11 +245,15 @@ func (handler *Handler) CreateHandle(writer http.ResponseWriter, request *http.R
 		id := strings.ReplaceAll(*params.QueueName, "-", "")
 		_, err := handler.GCPClient.CreateTopic(*handler.Context, *params.QueueName)
 		if err != nil {
-			logging.Log.Error("Error creating", err)
-			processError(err, writer)
-			return
+			if strings.Contains(err.Error(), "code = AlreadyExists") {
+				logging.Log.Infof("Topic %s already exists, assuming it is correct", *params.QueueName)
+			} else {
+				logging.Log.Error("Error creating", err)
+				processError(err, writer)
+				return
+			}
 		}
-		topic := handler.GCPClient.Topic(id)
+		topic := handler.GCPClient.Topic(*params.QueueName)
 		ackDuration, _ := time.ParseDuration("1m")
 		retentionDuration, _ := time.ParseDuration("1d")
 		_, err = handler.GCPClient.CreateSubscription(*handler.Context, id, pubsub.SubscriptionConfig{
@@ -255,13 +262,17 @@ func (handler *Handler) CreateHandle(writer http.ResponseWriter, request *http.R
 			RetentionDuration: retentionDuration,
 		})
 		if err != nil {
-			logging.Log.Errorf("Error creating subscription %s", err)
-			processError(err, writer)
-			return
+			if strings.Contains(err.Error(), "code = AlreadyExists") {
+				logging.Log.Infof("Subscription %s already exists, assuming it is correct", id)
+			} else {
+				logging.Log.Errorf("Error creating subscription %s", err)
+				processError(err, writer)
+				return
+			}
 		}
 		response = &response_type.CreateQueueResponse{
 			CreateQueueResult: response_type.QueueUrls{
-				QueueUrl: []string{fmt.Sprintf("https://sqs/%s", id)},
+				QueueUrl: []string{fmt.Sprintf("http://%s:%d/%s", handler.Config.GetString("hostname"), handler.Config.GetInt("port"), *params.QueueName)},
 			},
 			XmlNS: response_type.XmlNs,
 		}
@@ -424,6 +435,10 @@ func (handler *Handler) SendHandle(writer http.ResponseWriter, request *http.Req
 }
 func (handler *Handler) SendHandleParseInput(r *http.Request) (*sqs.SendMessageInput, error) {
 	url := r.Form.Get("QueueUrl")
+	if url == "" {
+		url = r.URL.Path[1:]
+		logging.Log.Infof("queue url is %s", url)
+	}
 	body := r.Form.Get("MessageBody")
 	input := &sqs.SendMessageInput{
 		QueueUrl:    &url,
@@ -583,14 +598,16 @@ func (handler *Handler) SendBatchHandleParseInput(r *http.Request) (*sqs.SendMes
 }
 
 func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionInfo pubsub.SubscriptionConfig, receivedAll chan []response_type.SqsMessage, subscription pubsub.Subscription, errChan chan error) {
+	// VisibilityTimeout if how long to hold a message for before it returns back to the queue
+	// WaitTimeSeconds or read timeout is the max time to wait before <= N messages return
 	cancelContext, cancelFunc1 := context.WithCancel(*handler.Context)
 	// this is to wait for acks
 	timeoutConfig := fmt.Sprintf("%ds", *params.VisibilityTimeout)
 	timeoutDuration, _ := time.ParseDuration(timeoutConfig)
 	// this is the timeout to read up to N entries.  return to user first of getting N entries or timeout
-	readTimeoutConfig := handler.Config.GetString("gcp_destination_config.pub_sub_config.read_timeout")
-	readTimeoutDuration, _ := time.ParseDuration(readTimeoutConfig)
-	logging.Log.Debugf("Waiting for %v", timeoutDuration)
+	waitTimeConfig := fmt.Sprintf("%ds", *params.WaitTimeSeconds)
+	waitTimeDuration, _ := time.ParseDuration(waitTimeConfig)
+	logging.Log.Debugf("Waiting for '%v', %v", waitTimeDuration, timeoutDuration)
 	cctx, cancelFunc := context.WithTimeout(cancelContext, timeoutDuration)
 	pieces := strings.Split(*params.QueueUrl, "/")
 	id := pieces[len(pieces)-1]
@@ -604,7 +621,7 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 	continueReading := true
 	go func() {
 		select {
-		case <-time.After(readTimeoutDuration):
+		case <-time.After(waitTimeDuration):
 			lock.Lock()
 			continueReading = false
 			lock.Unlock()
@@ -612,7 +629,7 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 			logging.Log.Debugf("receive window timeout")
 		}
 	}()
-	waitTimeoutChan := time.After(timeoutDuration)
+	// waitTimeoutChan := time.After(timeoutDuration)
 	go func() {
 		err := subscription.Receive(cctx, func(context context.Context, message *pubsub.Message) {
 			logging.Log.Debugf("Received %s", message.Data)
@@ -629,6 +646,9 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 			handler.ToAck[message.ID] = make(chan bool)
 			lock.Lock()
 			if !continueReading {
+				delete(handler.ToAck, message.ID)
+				logging.Log.Debugf("Should not continue reading (receive window timeout)")
+				message.Nack()
 				return
 			}
 			datas = append(datas, response_type.SqsMessage{
@@ -643,6 +663,7 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 				receivedAll <- datas
 			}
 			lock.Unlock()
+			logging.Log.Debugf("Entering select")
 			select {
 			case isAck := <-handler.ToAck[message.ID]:
 				delete(handler.ToAck, message.ID)
@@ -659,7 +680,7 @@ func (handler *Handler) gcpReceive(params sqs.ReceiveMessageInput, subscriptionI
 					logging.Log.Debugf("Done waiting for acks")
 					return
 				}
-			case <-waitTimeoutChan:
+			case <-time.After(timeoutDuration):
 				delete(handler.ToAck, message.ID)
 				logging.Log.Debugf("Timeout while waiting for acks")
 				message.Nack()
@@ -682,12 +703,11 @@ func (handler *Handler) ReceiveHandle(writer http.ResponseWriter, request *http.
 	var response *response_type.ReceiveMessageResponse
 	if handler.Config.IsSet("gcp_destination_config") {
 		pieces := strings.Split(*params.QueueUrl, "/")
-		id := pieces[len(pieces)-1]
+		id := strings.ReplaceAll(pieces[len(pieces)-1], "-", "")
 		subscription := handler.GCPClient.Subscription(id)
 		subscriptionInfo, err := subscription.Config(*handler.Context)
 		if err != nil {
-			writer.WriteHeader(400)
-			writer.Write([]byte(fmt.Sprint(err)))
+			processError(err, writer)
 			return
 		}
 		maxCount := params.MaxNumberOfMessages
@@ -750,6 +770,7 @@ func (handler *Handler) ReceiveHandleParseInput(r *http.Request) (*sqs.ReceiveMe
 	url := r.Form.Get("QueueUrl")
 	maxMessages := r.Form.Get("MaxNumberOfMessages")
 	visibility := r.Form.Get("VisibilityTimeout")
+	waitTimeout := r.Form.Get("WaitTimeSeconds")
 	input := &sqs.ReceiveMessageInput{
 		QueueUrl: &url,
 	}
@@ -771,6 +792,15 @@ func (handler *Handler) ReceiveHandleParseInput(r *http.Request) (*sqs.ReceiveMe
 	} else {
 		defaultTimeout := int64(30)
 		input.VisibilityTimeout = &defaultTimeout
+	}
+	if waitTimeout != "" {
+		waitNumber, _ := strconv.ParseInt(waitTimeout, 10, 64)
+		input.WaitTimeSeconds = &waitNumber
+	} else {
+		readTimeoutConfig := handler.Config.GetString("gcp_destination_config.pub_sub_config.read_timeout")
+		readTimeoutDuration, _ := time.ParseDuration(readTimeoutConfig)
+		readTimeoutSeconds := int64(readTimeoutDuration.Seconds())
+		input.WaitTimeSeconds = &readTimeoutSeconds
 	}
 	attributes := make([]sqs.QueueAttributeName, 0)
 	messageAttributes := make([]string, 0)

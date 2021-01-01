@@ -62,6 +62,7 @@ type GCPDatastoreConfig struct {
 type GCPConfig struct {
 	ServiceType          string                `mapstructure:"service_type"`
 	Port                 int                   `mapstructure:"port"`
+	Hostname             *string               `mapstructure:"hostname"`
 	DestinationAWSConfig *AWSDestinationConfig `mapstructure:"aws_destination_config"`
 	DestinationGCPConfig *GCPDestinationConfig `mapstructure:"gcp_destination_config"`
 }

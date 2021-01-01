@@ -53,6 +53,7 @@ aws_configs:
   sqs:
     service_type: "sqs"
     port: 3460
+    hostname: "localhost"
     aws_destination_config:
       name: "bleh"
       access_key_id: "my_key"
