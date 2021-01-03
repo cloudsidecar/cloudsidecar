@@ -2,9 +2,12 @@ package server
 
 import (
 	awshandler "cloudsidecar/pkg/aws/handler"
+	gcpHandler "cloudsidecar/pkg/gcp/handler"
 	kinesishandler "cloudsidecar/pkg/aws/handler/kinesis"
 	s3handler "cloudsidecar/pkg/aws/handler/s3"
+	gcsHandler "cloudsidecar/pkg/gcp/handler/gcs"
 	"cloudsidecar/pkg/aws/handler/s3/bucket"
+	gcsBucket "cloudsidecar/pkg/gcp/handler/gcs/bucket"
 	"cloudsidecar/pkg/aws/handler/s3/object"
 	csSqs "cloudsidecar/pkg/aws/handler/sqs"
 	conf "cloudsidecar/pkg/config"
@@ -20,6 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
+	"golang.org/x/net/http2"
 	"net/http"
 	"plugin"
 	"strings"
@@ -89,7 +93,33 @@ func createAWSConfigs(awsConfig *conf.AWSConfig) aws.Config {
 }
 
 // Create a handler from config
-func CreateHandler(key string, awsConfig *conf.AWSConfig, enterpriseSystem enterprise.Enterprise, serverWaitGroup *sync.WaitGroup) (handler awshandler.HandlerInterface, router *mux.Router, toListen bool) {
+func CreateHandlerGCP(key string, gcpConfig *conf.AWSConfig, enterpriseSystem enterprise.Enterprise, serverWaitGroup *sync.WaitGroup) (handler awshandler.HandlerInterface, router *mux.Router, toListen bool) {
+	var gcpHandler gcpHandler.HandlerInterface
+	toListen = true
+	r := mux.NewRouter()
+	r.Use(loggingMiddleware)
+	// ctx := context.Background()
+	if gcpConfig.ServiceType == "gcs" {
+		handler := gcsHandler.NewHandler(viper.Sub(fmt.Sprint("gcp_configs.", key)))
+		if gcpConfig.DestinationAWSConfig != nil {
+			configs := createAWSConfigs(gcpConfig)
+			svc := s3.New(configs)
+			handler.S3Client = svc
+		}
+		gcpHandler = &handler
+		bucketHandler := gcsBucket.New(&handler)
+		// register http handlers for bucket requests and object requests
+		bucketHandler.Register(r)
+	}
+	r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		logging.Log.Info("Catch all %s %s %s", request.URL, request.Method, request.Header)
+		writer.WriteHeader(404)
+	})
+	return gcpHandler, r, toListen
+}
+
+// Create a handler from config
+func CreateHandlerAWS(key string, awsConfig *conf.AWSConfig, enterpriseSystem enterprise.Enterprise, serverWaitGroup *sync.WaitGroup) (handler awshandler.HandlerInterface, router *mux.Router, toListen bool) {
 	var awsHandler awshandler.HandlerInterface
 	toListen = true
 	r := mux.NewRouter()
@@ -222,16 +252,80 @@ func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSyst
 	// Only run one at a time
 	listenLock.Lock()
 	defer listenLock.Unlock()
-	handlers := make(map[string]awshandler.HandlerInterface)
+	localAwsHandlers := make(map[string]awshandler.HandlerInterface)
+	localGcpHandlers := make(map[string]gcpHandler.HandlerInterface)
 	middlewares := getMiddlewares(enterpriseSystem, config)
+	for key, gcpConfig := range config.GcpConfigs {
+		gcpHandler, r, toListen := CreateHandlerGCP(key, &gcpConfig, enterpriseSystem, serverWaitGroup)
+		oldHandler := gcpHandlers[key]
+		if oldHandler != nil {
+			logging.Log.Infof("Handler %s already exists, replacing", key)
+		}
+		localGcpHandlers[key] = gcpHandler
+		port := gcpConfig.Port
+		// Add in configured middlewares
+		for _, middlewareName := range gcpConfig.Middleware {
+			if middleware, ok := middlewares[middlewareName]; ok {
+				r.Use(middleware)
+			} else {
+				logging.Log.Error("Could not find middleware ", middlewareName)
+			}
+		}
+		// listen for all handlers
+		if toListen {
+			routewrapper := &RouteWrapper{
+				router: &RouterWithCounter{
+					mux: r,
+				},
+			}
+			if existingRouter, ok := routes[key]; ok {
+				logging.Log.Debug("Route existed", key)
+				existingRouter.ChangeRouter(&RouterWithCounter{
+					mux: r,
+				}, oldHandler)
+				routewrapper = existingRouter
+			}
+			routes[key] = routewrapper
+			h2s := &http2.Server{}
+			srv := &http.Server{
+				Handler: routewrapper,
+				Addr:    fmt.Sprintf("127.0.0.1:%d", port),
+			}
+			h2sConfigErr := http2.ConfigureServer(srv, h2s)
+			if h2sConfigErr != nil {
+				logging.Log.Errorf("Could not set up http2 %v", h2sConfigErr)
+				continue
+			}
+			logging.Log.Debug("Listening on %s", srv.Addr)
+			if existingSrv, ok := gcpServers[key]; ok {
+				if existingSrv.Addr != srv.Addr {
+					logging.Log.Errorf("Cannot change a bind address on config %s from %s to %s", key, existingSrv.Addr, srv.Addr)
+					continue
+				}
+			} else {
+				serverWaitGroup.Add(1)
+				gcpServers[key] = srv
+				go func() {
+					// listenErr := srv.ListenAndServeTLS("server.crt", "server.key")
+					listenErr := srv.ListenAndServe()
+					logging.Log.Error("", listenErr)
+					if (*config).PanicOnBindError && strings.Contains(listenErr.Error(), "bind: address already in use") {
+						panic("Could not bind, exiting")
+					}
+					gcpHandler.Shutdown()
+					serverWaitGroup.Done()
+				}()
+			}
+		}
+	}
 	// for each configured aws config, we want to set up an http listener
 	for key, awsConfig := range config.AwsConfigs {
-		awsHandler, r, toListen := CreateHandler(key, &awsConfig, enterpriseSystem, serverWaitGroup)
+		awsHandler, r, toListen := CreateHandlerAWS(key, &awsConfig, enterpriseSystem, serverWaitGroup)
 		oldHandler := awsHandlers[key]
 		if oldHandler != nil {
 			logging.Log.Infof("Handler %s already exists, replacing", key)
 		}
-		handlers[key] = awsHandler
+		localAwsHandlers[key] = awsHandler
 		port := awsConfig.Port
 		// Add in configured middlewares
 		for _, middlewareName := range awsConfig.Middleware {
@@ -261,14 +355,14 @@ func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSyst
 				Addr:    fmt.Sprintf("127.0.0.1:%d", port),
 			}
 			logging.Log.Debug("Listening on %s", srv.Addr)
-			if existingSrv, ok := servers[key]; ok {
+			if existingSrv, ok := awsServers[key]; ok {
 				if existingSrv.Addr != srv.Addr {
 					logging.Log.Errorf("Cannot change a bind address on config %s from %s to %s", key, existingSrv.Addr, srv.Addr)
 					continue
 				}
 			} else {
 				serverWaitGroup.Add(1)
-				servers[key] = srv
+				awsServers[key] = srv
 				go func() {
 					listenErr := srv.ListenAndServe()
 					logging.Log.Error("", listenErr)
@@ -281,14 +375,24 @@ func Listen(config *conf.Config, serverWaitGroup *sync.WaitGroup, enterpriseSyst
 			}
 		}
 	}
-	for key, srv := range servers {
+	for key, srv := range awsServers {
 		if _, ok := config.AwsConfigs[key]; !ok {
 			logging.Log.Infof("Removing server %s on %s", key, srv.Addr)
 			srv.Close()
-			delete(servers, key)
+			delete(awsServers, key)
 			delete(routes, key)
 			delete(awsHandlers, key)
 		}
 	}
-	awsHandlers = handlers
+	for key, srv := range gcpServers {
+		if _, ok := config.GcpConfigs[key]; !ok {
+			logging.Log.Infof("Removing server %s on %s", key, srv.Addr)
+			srv.Close()
+			delete(awsServers, key)
+			delete(routes, key)
+			delete(awsHandlers, key)
+		}
+	}
+	awsHandlers = localAwsHandlers
+	gcpHandlers = localGcpHandlers
 }

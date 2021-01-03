@@ -48,12 +48,10 @@ This is assuming that CS is running on the same host on port 3451
 ### Pyhon Google Cloud API v2 **Not Implemented**
 You need to extend the Client and change the service address.  Example:
 ```
-from google.cloud.bigtable_v2.gapic import bigtable_client
+from google.cloud import storage
 
-class Bleh(bigtable_client.BigtableClient):
-  SERVICE_ADDRESS = 'localhost:3453'
+cl = storage.Client(client_options={"api_endpoint": "http://localhost:3900"})
 
-bleh = Bleh()
 ```
 
 ### Java Google Cloud API v2 **Not Implemented**
