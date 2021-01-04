@@ -98,13 +98,34 @@ func CreateHandlerGCP(key string, gcpConfig *conf.AWSConfig, enterpriseSystem en
 	toListen = true
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware)
-	// ctx := context.Background()
+	ctx := context.Background()
 	if gcpConfig.ServiceType == "gcs" {
 		handler := gcsHandler.NewHandler(viper.Sub(fmt.Sprint("gcp_configs.", key)))
 		if gcpConfig.DestinationAWSConfig != nil {
 			configs := createAWSConfigs(gcpConfig)
 			svc := s3.New(configs)
 			handler.S3Client = svc
+		}
+		if gcpConfig.DestinationGCPConfig != nil {
+			// use GCS
+			var gcpClient func() (s3handler.GCPClient, error)
+			if gcpConfig.DestinationGCPConfig.KeyFileLocation != nil {
+				credInput := *gcpConfig.DestinationGCPConfig.KeyFileLocation
+				gcpClient = func() (s3handler.GCPClient, error) {
+					return newGCPStorage(ctx, credInput)
+				}
+			} else if gcpConfig.DestinationGCPConfig.KeyFromUrl != nil && *gcpConfig.DestinationGCPConfig.KeyFromUrl {
+				gcpClient = func() (s3handler.GCPClient, error) {
+					return newGCPStorageNoCreds(ctx)
+				}
+			} else {
+				credInput := *gcpConfig.DestinationGCPConfig.RawKey
+				gcpClient = func() (s3handler.GCPClient, error) {
+					return newGCPStorageRawKey(ctx, credInput)
+				}
+			}
+			handler.GCPClient = gcpClient
+			handler.Context = &ctx
 		}
 		gcpHandler = &handler
 		bucketHandler := gcsBucket.New(&handler)

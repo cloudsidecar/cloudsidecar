@@ -61,6 +61,25 @@ func (handler *Handler) GCPRequestSetup(request *http.Request) (s3.GCPClient, er
 	return handler.GetConnection("")
 }
 
+func (handler *Handler) ReturnConnection(client s3.GCPClient, request *http.Request) {
+	if handler.Config != nil {
+		keyFromUrl := handler.Config.Get("gcp_destination_config.key_from_url")
+		vars := mux.Vars(request)
+		creds := vars["creds"]
+		if keyFromUrl != nil && keyFromUrl == true && creds != "" {
+			handler.ReturnConnectionByKey(client, creds)
+			return
+		}
+	}
+	handler.ReturnConnectionByKey(client, "")
+}
+
+func (handler *Handler) ReturnConnectionByKey(client s3.GCPClient, key string) {
+	handler.gcpClientPoolLock.Lock()
+	defer handler.gcpClientPoolLock.Unlock()
+	handler.GCPClientPool[key] = append(handler.GCPClientPool[key], client)
+}
+
 
 func NewHandler(config *viper.Viper) Handler {
 	return Handler{
