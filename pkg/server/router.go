@@ -8,6 +8,7 @@ import (
 	gcsHandler "cloudsidecar/pkg/gcp/handler/gcs"
 	"cloudsidecar/pkg/aws/handler/s3/bucket"
 	gcsBucket "cloudsidecar/pkg/gcp/handler/gcs/bucket"
+	gcsObject "cloudsidecar/pkg/gcp/handler/gcs/object"
 	"cloudsidecar/pkg/aws/handler/s3/object"
 	csSqs "cloudsidecar/pkg/aws/handler/sqs"
 	conf "cloudsidecar/pkg/config"
@@ -129,8 +130,10 @@ func CreateHandlerGCP(key string, gcpConfig *conf.AWSConfig, enterpriseSystem en
 		}
 		gcpHandler = &handler
 		bucketHandler := gcsBucket.New(&handler)
+		objectHandler := gcsObject.New(&handler)
 		// register http handlers for bucket requests and object requests
 		bucketHandler.Register(r)
+		objectHandler.Register(r)
 	}
 	r.PathPrefix("/").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		logging.Log.Info("Catch all %s %s %s", request.URL, request.Method, request.Header)

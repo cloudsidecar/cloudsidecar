@@ -60,6 +60,8 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 		if respError != nil {
 			panic(fmt.Sprintf("Error %s", respError))
 		}
+		bucket := wrapper.BucketRename(*input.Bucket)
+		input.Bucket = &bucket
 		grants := make([]*storage.BucketAccessControl, len(resp.Grants))
 		for i, grant := range resp.Grants {
 			perm, _ := grant.Permission.MarshalValue()
@@ -163,6 +165,8 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 	}
 	if wrapper.Config.IsSet("aws_destination_config") {
 		logging.LogUsingAWS()
+		bucket := wrapper.BucketRename(*input.Bucket)
+		input.Bucket = &bucket
 		objects, err := wrapper.S3Client.ListObjectsV2Request(input).Send()
 		if err != nil {
 			writer.WriteHeader(400)

@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/api/option"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -135,4 +136,19 @@ func (handler *Handler) SetContext(context *context.Context) {
 }
 func (handler *Handler) SetConfig(config *viper.Viper) {
 	handler.Config = config
+}
+
+func (handler *Handler) BucketRename(bucket string) string {
+	if handler.Config != nil {
+		renameMap := handler.Config.GetStringMapString("aws_destination_config.s3_config.bucket_rename")
+		bucket = strings.Replace(bucket, ".", "__dot__", -1)
+		if renameMap != nil {
+			if val, ok := renameMap[bucket]; ok {
+				return val
+			}
+		}
+		return bucket
+	} else {
+		return bucket
+	}
 }
