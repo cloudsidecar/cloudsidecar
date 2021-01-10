@@ -409,8 +409,8 @@ func (handler *Handler) MultiPartHandle(writer http.ResponseWriter, request *htt
 		f, fileErr := os.Create(path)
 		if fileErr != nil {
 			writer.WriteHeader(404)
-			logging.Log.Error("Error %s %s", request.RequestURI, err)
-			writer.Write([]byte(string(fmt.Sprint(err))))
+			logging.Log.Error("Error %s %s", request.RequestURI, fileErr)
+			writer.Write([]byte(string(fmt.Sprint(fileErr))))
 			return
 		}
 		defer f.Close()

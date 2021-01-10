@@ -36,7 +36,9 @@ type AWSDestinationConfig struct {
 	Name            string `mapstructure:"name"`
 	AccessKeyId     string `mapstructure:"access_key_id"`
 	SecretAccessKey string `mapstructure:"secret_access_key"`
+	S3Config        *GCSConfig          `mapstructure:"s3_config"`
 }
+
 
 type GCPDestinationConfig struct {
 	Name            string              `mapstructure:"name"`
