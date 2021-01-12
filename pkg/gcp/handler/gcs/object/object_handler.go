@@ -62,6 +62,7 @@ func (wrapper *Handler) Register(mux *mux.Router) {
 		mux.HandleFunc("/{creds}/upload/storage/v1/b/{bucket}/o", wrapper.UploadResumableHandle).Queries("uploadType", "resumable", "upload_id", "{uploadId}").Methods("PUT")
 		mux.HandleFunc("/{creds}/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}/rewriteTo/b/{destBucket}/o/{destKey:[^#?\\s]+}", wrapper.CopyHandle).Methods("POST")
 		mux.HandleFunc("/{creds}/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}/copyTo/b/{destBucket}/o/{destKey:[^#?\\s]+}", wrapper.CopyHandle).Methods("POST")
+		mux.HandleFunc("/{creds}/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}", wrapper.DeleteHandle).Methods("DELETE")
 	} else {
 		mux.HandleFunc("/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}", wrapper.GetHandle).Methods("GET")
 		mux.HandleFunc("/download/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}", wrapper.GetHandle).Methods("GET")
@@ -70,6 +71,7 @@ func (wrapper *Handler) Register(mux *mux.Router) {
 		mux.HandleFunc("/upload/storage/v1/b/{bucket}/o", wrapper.UploadResumableHandle).Queries("uploadType", "resumable", "upload_id", "{uploadId}").Methods("PUT")
 		mux.HandleFunc("/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}/rewriteTo/b/{destBucket}/o/{destKey:[^#?\\s]+}", wrapper.CopyHandle).Methods("POST")
 		mux.HandleFunc("/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}/copyTo/b/{destBucket}/o/{destKey:[^#?\\s]+}", wrapper.CopyHandle).Methods("POST")
+		mux.HandleFunc("/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}", wrapper.DeleteHandle).Methods("DELETE")
 	}
 }
 
@@ -513,6 +515,58 @@ func (handler *Handler) CopyParseInput(r *http.Request) (*s3.CopyObjectInput, er
 		Bucket: &destBucket,
 		Key: &destKey,
 		CopySource: &source,
+	}, nil
+}
+
+func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.Request) {
+	s3Req, err := handler.DeleteParseInput(request)
+	if err != nil {
+		writer.WriteHeader(400)
+		logging.Log.Error("Error at %s %s", request.RequestURI, err)
+		writer.Write([]byte(string(fmt.Sprint(err))))
+		return
+	}
+	if handler.Config.IsSet("aws_destination_config") {
+		logging.LogUsingAWS()
+		_, err := handler.S3Client.DeleteObjectRequest(s3Req).Send()
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
+			return
+		}
+	} else if handler.Config.IsSet("gcp_destination_config")  {
+		// Use GCS
+		// Log that we are using GCP, get a client based on configurations.  This is from a pool
+		client, err := handler.GCPRequestSetup(request)
+		if client != nil {
+			// return connection to pool after done
+			defer handler.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
+		bucket := handler.BucketRename(*s3Req.Bucket)
+		bucketHandle := handler.GCPClientToBucket(bucket, client)
+		objectHandle := handler.GCPBucketToObject(*s3Req.Key, bucketHandle)
+		err = objectHandle.Delete(*handler.Context)
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
+			return
+		}
+	}
+	writer.WriteHeader(200)
+}
+func (handler *Handler) DeleteParseInput(r *http.Request) (*s3.DeleteObjectInput, error) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	key := vars["key"]
+	return &s3.DeleteObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
 	}, nil
 }
 
