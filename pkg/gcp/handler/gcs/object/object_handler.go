@@ -10,13 +10,13 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
+	uuid2 "github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"mime"
 	"mime/multipart"
-	uuid2 "github.com/google/uuid"
 	"net/http"
 	"os"
 	"strconv"
@@ -60,12 +60,16 @@ func (wrapper *Handler) Register(mux *mux.Router) {
 		mux.HandleFunc("/{creds}/upload/storage/v1/b/{bucket}/o", wrapper.UploadMultipartHandle).Queries("uploadType", "multipart").Methods("POST")
 		mux.HandleFunc("/{creds}/upload/storage/v1/b/{bucket}/o", wrapper.ResumableHandle).Queries("uploadType", "resumable").Methods("POST")
 		mux.HandleFunc("/{creds}/upload/storage/v1/b/{bucket}/o", wrapper.UploadResumableHandle).Queries("uploadType", "resumable", "upload_id", "{uploadId}").Methods("PUT")
+		mux.HandleFunc("/{creds}/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}/rewriteTo/b/{destBucket}/o/{destKey:[^#?\\s]+}", wrapper.CopyHandle).Methods("POST")
+		mux.HandleFunc("/{creds}/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}/copyTo/b/{destBucket}/o/{destKey:[^#?\\s]+}", wrapper.CopyHandle).Methods("POST")
 	} else {
 		mux.HandleFunc("/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}", wrapper.GetHandle).Methods("GET")
 		mux.HandleFunc("/download/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}", wrapper.GetHandle).Methods("GET")
 		mux.HandleFunc("/upload/storage/v1/b/{bucket}/o", wrapper.UploadMultipartHandle).Queries("uploadType", "multipart").Methods("POST")
 		mux.HandleFunc("/upload/storage/v1/b/{bucket}/o", wrapper.ResumableHandle).Queries("uploadType", "resumable").Methods("POST")
 		mux.HandleFunc("/upload/storage/v1/b/{bucket}/o", wrapper.UploadResumableHandle).Queries("uploadType", "resumable", "upload_id", "{uploadId}").Methods("PUT")
+		mux.HandleFunc("/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}/rewriteTo/b/{destBucket}/o/{destKey:[^#?\\s]+}", wrapper.CopyHandle).Methods("POST")
+		mux.HandleFunc("/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}/copyTo/b/{destBucket}/o/{destKey:[^#?\\s]+}", wrapper.CopyHandle).Methods("POST")
 	}
 }
 
@@ -320,7 +324,7 @@ func (handler *Handler) ResumableHandle(writer http.ResponseWriter, request *htt
 }
 
 func (handler *Handler) UploadResumableHandle(writer http.ResponseWriter, request *http.Request) {
-	s3Req, err := handler.UploadResumableParseInput(request)
+	s3Req, path, err := handler.UploadResumableParseInput(request)
 	if err != nil {
 		writer.WriteHeader(400)
 		logging.Log.Error("Error at %s %s", request.RequestURI, err)
@@ -350,7 +354,6 @@ func (handler *Handler) UploadResumableHandle(writer http.ResponseWriter, reques
 			// return connection to pool after done
 			defer handler.ReturnConnection(client, request)
 		}
-		logging.Log.Infof("Got headers %s %s", *s3Req.Key, *s3Req.ContentType)
 		if err != nil {
 			writer.WriteHeader(400)
 			logging.Log.Error("Error a %s %s", request.RequestURI, err)
@@ -382,11 +385,12 @@ func (handler *Handler) UploadResumableHandle(writer http.ResponseWriter, reques
 		logging.Log.Error("Error %s %s", request.RequestURI, err)
 		return
 	}
+	defer os.Remove(path)
 	logging.Log.Debugf("Upload result %s", jsonAttrs)
 	writer.WriteHeader(200)
 	writer.Write(jsonAttrs)
 }
-func (handler *Handler) UploadResumableParseInput(r *http.Request) (*s3manager.UploadInput, error) {
+func (handler *Handler) UploadResumableParseInput(r *http.Request) (*s3manager.UploadInput, string, error) {
 	vars := mux.Vars(r)
 	uploadId := vars["uploadId"]
 	var path string
@@ -400,17 +404,116 @@ func (handler *Handler) UploadResumableParseInput(r *http.Request) (*s3manager.U
 	f, fileErr := os.Open(path)
 	if fileErr != nil {
 		logging.Log.Errorf("Error opening %s %v", path, fileErr)
-		return nil, fileErr
+		return nil, "", fileErr
 	}
 	defer f.Close()
 	var req s3manager.UploadInput
 	byteValue, _ := ioutil.ReadAll(f)
 	logging.Log.Debugf("Resuming %s %s", path, byteValue)
 	if err := json.Unmarshal(byteValue, &req); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	req.Body = r.Body
-	return &req, nil
+	return &req, path, nil
+}
+
+func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Request) {
+	s3Req, err := handler.CopyParseInput(request)
+	if err != nil {
+		writer.WriteHeader(400)
+		logging.Log.Error("Error at %s %s", request.RequestURI, err)
+		writer.Write([]byte(string(fmt.Sprint(err))))
+		return
+	}
+	var copyResult CopyResponse
+	if handler.Config.IsSet("aws_destination_config") {
+		logging.LogUsingAWS()
+		req := handler.S3Client.CopyObjectRequest(s3Req)
+		_, err := req.Send()
+		if err != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
+			return
+		}
+		headInfo, err := handler.S3Client.HeadObjectRequest(&s3.HeadObjectInput{
+			Bucket: s3Req.Bucket,
+			Key: s3Req.Key,
+		}).Send()
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
+			return
+		}
+		copyResult = CopyResponse{
+			Kind: "storage#rewriteResponse",
+			TotalBytesRewritten: *headInfo.ContentLength,
+			ObjectSize: *headInfo.ContentLength,
+			Done: true,
+			Resource: "moo",
+		}
+	} else if handler.Config.IsSet("gcp_destination_config") {
+		// Use GCS
+		// Log that we are using GCP, get a client based on configurations.  This is from a pool
+		client, err := handler.GCPRequestSetup(request)
+		if client != nil {
+			// return connection to pool after done
+			defer handler.ReturnConnection(client, request)
+		}
+		if err != nil {
+			writer.WriteHeader(400)
+			logging.Log.Error("Error a %s %s", request.RequestURI, err)
+			writer.Write([]byte(string(fmt.Sprint(err))))
+			return
+		}
+		source := *s3Req.CopySource
+		if strings.Index(source, "/") == 0 {
+			source = source[1:]
+		}
+		sourcePieces := strings.SplitN(source, "/", 2)
+		sourceBucket := sourcePieces[0]
+		sourceKey := sourcePieces[1]
+		bucket := handler.BucketRename(*s3Req.Bucket)
+		bucketHandle := handler.GCPClientToBucket(bucket, client)
+		sourceBucket = handler.BucketRename(sourceBucket)
+		sourceHandle := handler.GCPClientToBucket(sourceBucket, client).Object(sourceKey)
+		logging.Log.Debugf("Copying %s %s to %s %s", sourceBucket, sourceKey, bucket, *s3Req.Key)
+		uploader := handler.GCPBucketToObject(*s3Req.Key, bucketHandle).CopierFrom(sourceHandle)
+		attrs, err := uploader.Run(*handler.Context)
+		if err != nil {
+			writer.WriteHeader(404)
+			logging.Log.Error("Error %s %s", request.RequestURI, err)
+			return
+		}
+		copyResult = CopyResponse{
+			Kind: "storage#rewriteResponse",
+			TotalBytesRewritten: attrs.Size,
+			ObjectSize: attrs.Size,
+			Done: true,
+			Resource: "moo",
+		}
+	}
+	jsonResult, err := json.Marshal(copyResult)
+	if err != nil {
+		writer.WriteHeader(400)
+		logging.Log.Error("Error %s %s", request.RequestURI, err)
+		return
+	}
+	writer.WriteHeader(200)
+	writer.Write(jsonResult)
+}
+
+func (handler *Handler) CopyParseInput(r *http.Request) (*s3.CopyObjectInput, error) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	key := vars["key"]
+	destBucket := vars["destBucket"]
+	destKey := vars["destKey"]
+	source := fmt.Sprintf("%s/%s", bucket, key)
+	return &s3.CopyObjectInput{
+		Bucket: &destBucket,
+		Key: &destKey,
+		CopySource: &source,
+	}, nil
 }
 
 
