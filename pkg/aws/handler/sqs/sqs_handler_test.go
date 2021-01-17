@@ -86,16 +86,16 @@ func TestHandler_SendHandleParseInput(t *testing.T) {
 	handler := NewHandler(getConfig())
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450")
 	req := &http.Request{
-		URL:  testUrl,
+		URL: testUrl,
 		Form: url.Values{
-			"QueueUrl": []string{"woof"},
-			"MessageBody": []string{"this is my body"},
-			"MessageAttribute.1.Name": []string{"my_attribute_name_1"},
+			"QueueUrl":                             []string{"woof"},
+			"MessageBody":                          []string{"this is my body"},
+			"MessageAttribute.1.Name":              []string{"my_attribute_name_1"},
 			"MessageAttribute.1.Value.StringValue": []string{"my_attribute_value_1"},
-			"MessageAttribute.1.Value.DataType": []string{"String"},
-			"MessageAttribute.2.Name": []string{"my_attribute_name_2"},
+			"MessageAttribute.1.Value.DataType":    []string{"String"},
+			"MessageAttribute.2.Name":              []string{"my_attribute_name_2"},
 			"MessageAttribute.2.Value.StringValue": []string{"my_attribute_value_2"},
-			"MessageAttribute.2.Value.DataType": []string{"String"},
+			"MessageAttribute.2.Value.DataType":    []string{"String"},
 		},
 	}
 	input, _ := handler.SendHandleParseInput(req)
@@ -117,7 +117,7 @@ func TestHandler_SendHandle(t *testing.T) {
 		URL:  testUrl,
 		Body: fakeReader,
 		Form: url.Values{
-			"QueueUrl": []string{"myQueue/queuename"},
+			"QueueUrl":    []string{"myQueue/queuename"},
 			"MessageBody": []string{"bvrp"},
 		},
 	}
@@ -136,7 +136,7 @@ func TestHandler_SendHandle(t *testing.T) {
 	mockGcpTopic.EXPECT().Stop()
 	mockGcpPublishResult.EXPECT().Get(ctx).Return("meowid", nil)
 	handler.GCPClient = mockGcpClient
-	handler.GCPClientToTopic =  func(topic string, client kinesis.GCPClient) kinesis.GCPTopic {
+	handler.GCPClientToTopic = func(topic string, client kinesis.GCPClient) kinesis.GCPTopic {
 		return mockGcpTopic
 	}
 	handler.GCPResultWrapper = func(result *pubsub.PublishResult) kinesis.GCPPublishResult {
@@ -152,9 +152,9 @@ func TestHandler_ReceiveHandleParseInput(t *testing.T) {
 	handler := NewHandler(getConfig())
 	testUrl, _ := url.ParseRequestURI("http://localhost:3450")
 	req := &http.Request{
-		URL:  testUrl,
+		URL: testUrl,
 		Form: url.Values{
-			"QueueUrl": []string{"woof"},
+			"QueueUrl":          []string{"woof"},
 			"VisibilityTimeout": []string{"50"},
 		},
 	}

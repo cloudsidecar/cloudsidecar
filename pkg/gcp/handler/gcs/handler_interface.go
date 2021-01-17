@@ -2,11 +2,11 @@ package gcs
 
 import (
 	"cloud.google.com/go/storage"
+	"cloudsidecar/pkg/aws/handler/s3"
 	"cloudsidecar/pkg/logging"
 	"context"
 	"encoding/base64"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3iface"
-	"cloudsidecar/pkg/aws/handler/s3"
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
 	"google.golang.org/api/option"
@@ -80,7 +80,6 @@ func (handler *Handler) ReturnConnectionByKey(client s3.GCPClient, key string) {
 	defer handler.gcpClientPoolLock.Unlock()
 	handler.GCPClientPool[key] = append(handler.GCPClientPool[key], client)
 }
-
 
 func NewHandler(config *viper.Viper) Handler {
 	return Handler{

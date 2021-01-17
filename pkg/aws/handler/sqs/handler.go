@@ -23,15 +23,15 @@ import (
 )
 
 type Handler struct {
-	SqsClient        *sqs.SQS
-	GCPClient        kinesis.GCPClient
-	GCPClientToTopic func(topic string, client kinesis.GCPClient) kinesis.GCPTopic
-	GCPResultWrapper func(result *pubsub.PublishResult) kinesis.GCPPublishResult
-	GCPKMSClient     *kms.KeyManagementClient
+	SqsClient               *sqs.SQS
+	GCPClient               kinesis.GCPClient
+	GCPClientToTopic        func(topic string, client kinesis.GCPClient) kinesis.GCPTopic
+	GCPResultWrapper        func(result *pubsub.PublishResult) kinesis.GCPPublishResult
+	GCPKMSClient            *kms.KeyManagementClient
 	GCPClientToSubscription func(client kinesis.GCPClient, id string)
-	Context          *context.Context
-	Config           *viper.Viper
-	ToAck            map[string]chan bool
+	Context                 *context.Context
+	Config                  *viper.Viper
+	ToAck                   map[string]chan bool
 }
 
 func NewHandler(config *viper.Viper) Handler {
@@ -154,7 +154,7 @@ func (handler *Handler) Handle(writer http.ResponseWriter, request *http.Request
 	} else if action == "SendMessageBatch" {
 		handler.SendBatchHandle(writer, request)
 	} else {
-		processError(errors.New("Invalid function " + action), writer)
+		processError(errors.New("Invalid function "+action), writer)
 	}
 }
 
