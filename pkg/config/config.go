@@ -8,7 +8,7 @@ import (
 
 type Config struct {
 	AwsConfigs       map[string]AWSConfig        `mapstructure:"aws_configs"`
-	GcpConfigs       map[string]GCPConfig        `mapstructure:"gcp_configs"`
+	GcpConfigs       map[string]AWSConfig        `mapstructure:"gcp_configs"`
 	Middleware       map[string]MiddlewareConfig `mapstructure:"middleware"`
 	Logger           *LogConfig                  `mapstructure:"logger"`
 	PanicOnBindError bool                        `mapstructure:"panic_on_bind_error"`
@@ -36,7 +36,9 @@ type AWSDestinationConfig struct {
 	Name            string `mapstructure:"name"`
 	AccessKeyId     string `mapstructure:"access_key_id"`
 	SecretAccessKey string `mapstructure:"secret_access_key"`
+	S3Config        *GCSConfig          `mapstructure:"s3_config"`
 }
+
 
 type GCPDestinationConfig struct {
 	Name            string              `mapstructure:"name"`
@@ -59,6 +61,7 @@ type GCPDatastoreConfig struct {
 	TableKeyNameMap map[string]string `mapstructure:"table_key_map"`
 }
 
+/*
 type GCPConfig struct {
 	ServiceType          string                `mapstructure:"service_type"`
 	Port                 int                   `mapstructure:"port"`
@@ -66,6 +69,7 @@ type GCPConfig struct {
 	DestinationAWSConfig *AWSDestinationConfig `mapstructure:"aws_destination_config"`
 	DestinationGCPConfig *GCPDestinationConfig `mapstructure:"gcp_destination_config"`
 }
+ */
 
 func FromFile(filename string) *Config {
 	var config Config

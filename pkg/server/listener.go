@@ -5,6 +5,7 @@ import (
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 	awshandler "cloudsidecar/pkg/aws/handler"
+	gcpHandler "cloudsidecar/pkg/gcp/handler"
 	conf "cloudsidecar/pkg/config"
 	"cloudsidecar/pkg/enterprise"
 	"cloudsidecar/pkg/logging"
@@ -26,12 +27,14 @@ const Version = "0.0.16"
 
 // Handlers map
 var awsHandlers map[string]awshandler.HandlerInterface
+var gcpHandlers map[string]gcpHandler.HandlerInterface
 
 // Handles http requests
 var routes map[string]*RouteWrapper
 
 // Http Servers map
-var servers map[string]*http.Server
+var awsServers map[string]*http.Server
+var gcpServers map[string]*http.Server
 
 // Creates an http client for GCP.  This is needed so we can set timeouts and not
 // share http/2 connections between gcp uses, which helps with GCS
@@ -130,7 +133,9 @@ func Main(config *conf.Config, onConfigChange <-chan string, cmd *cobra.Command,
 	var serverWaitGroup sync.WaitGroup
 	var enterpriseSystem enterprise.Enterprise
 	awsHandlers = make(map[string]awshandler.HandlerInterface)
-	servers = make(map[string]*http.Server)
+	gcpHandlers = make(map[string]gcpHandler.HandlerInterface)
+	awsServers = make(map[string]*http.Server)
+	gcpServers = make(map[string]*http.Server)
 	routes = make(map[string]*RouteWrapper)
 	enterprise.RegisterType(reflect.TypeOf(enterprise.Noop{}))
 	enterpriseSystem = enterprise.GetSingleton()
