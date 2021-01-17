@@ -1,9 +1,9 @@
 package bucket
 
 import (
+	original_storage "cloud.google.com/go/storage"
 	gcs_handler "cloudsidecar/pkg/gcp/handler/gcs"
 	"cloudsidecar/pkg/logging"
-	original_storage "cloud.google.com/go/storage"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,7 +32,6 @@ type Handler struct {
 func New(gcsHandler *gcs_handler.Handler) *Handler {
 	return &Handler{gcsHandler}
 }
-
 
 // Register HTTP patterns to functions
 func (wrapper *Handler) Register(mux *mux.Router) {
@@ -66,12 +65,12 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 		for i, grant := range resp.Grants {
 			perm, _ := grant.Permission.MarshalValue()
 			var displayName string
-			if (perm == "FULL_CONTROL") {
+			if perm == "FULL_CONTROL" {
 				displayName = fmt.Sprintf("project-owners-%s", *grant.Grantee.DisplayName)
 			}
 			grants[i] = &storage.BucketAccessControl{
 				Bucket: *input.Bucket,
-				Role: perm,
+				Role:   perm,
 				Entity: displayName,
 			}
 		}
@@ -107,7 +106,7 @@ func (wrapper *Handler) ACLHandle(writer http.ResponseWriter, request *http.Requ
 		for i, rule := range rules {
 			acls[i] = &storage.BucketAccessControl{
 				Bucket: bucket,
-				Role: string(rule.Role),
+				Role:   string(rule.Role),
 				Entity: string(rule.Entity),
 			}
 		}
@@ -142,9 +141,9 @@ func (wrapper *Handler) awsToGcpList(output *s3.ListObjectsV2Output) ([]*storage
 		return results, nil
 	} else {
 		req := &s3.ListObjectsV2Input{
-			Bucket: output.Name,
+			Bucket:            output.Name,
 			ContinuationToken: output.NextContinuationToken,
-			Delimiter: output.Delimiter,
+			Delimiter:         output.Delimiter,
 		}
 		objects, err := wrapper.S3Client.ListObjectsV2Request(req).Send()
 		if err != nil {
@@ -212,7 +211,7 @@ func (wrapper *Handler) ListHandle(writer http.ResponseWriter, request *http.Req
 			}
 			keys = append(keys, &storage.Object{
 				Bucket: bucket,
-				Name: row.Name,
+				Name:   row.Name,
 			})
 		}
 		result := storage.Objects{

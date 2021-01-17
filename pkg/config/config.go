@@ -33,12 +33,11 @@ type AWSConfig struct {
 }
 
 type AWSDestinationConfig struct {
-	Name            string `mapstructure:"name"`
-	AccessKeyId     string `mapstructure:"access_key_id"`
-	SecretAccessKey string `mapstructure:"secret_access_key"`
-	S3Config        *GCSConfig          `mapstructure:"s3_config"`
+	Name            string     `mapstructure:"name"`
+	AccessKeyId     string     `mapstructure:"access_key_id"`
+	SecretAccessKey string     `mapstructure:"secret_access_key"`
+	S3Config        *GCSConfig `mapstructure:"s3_config"`
 }
-
 
 type GCPDestinationConfig struct {
 	Name            string              `mapstructure:"name"`
@@ -69,7 +68,7 @@ type GCPConfig struct {
 	DestinationAWSConfig *AWSDestinationConfig `mapstructure:"aws_destination_config"`
 	DestinationGCPConfig *GCPDestinationConfig `mapstructure:"gcp_destination_config"`
 }
- */
+*/
 
 func FromFile(filename string) *Config {
 	var config Config

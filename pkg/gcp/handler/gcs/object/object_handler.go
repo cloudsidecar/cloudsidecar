@@ -78,7 +78,6 @@ func (wrapper *Handler) Register(mux *mux.Router) {
 	}
 }
 
-
 func (handler *Handler) GetHandle(writer http.ResponseWriter, request *http.Request) {
 	input, _ := handler.GetParseInput(request)
 	identifier := rand.Int()
@@ -227,7 +226,7 @@ func (handler *Handler) UploadMultipartHandle(writer http.ResponseWriter, reques
 		}
 		attrs = &storage.ObjectAttrs{
 			Bucket: *s3Req.Bucket,
-			Name: *s3Req.Key,
+			Name:   *s3Req.Key,
 		}
 	} else if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
@@ -351,7 +350,7 @@ func (handler *Handler) UploadResumableHandle(writer http.ResponseWriter, reques
 		}
 		attrs = &storage.ObjectAttrs{
 			Bucket: *s3Req.Bucket,
-			Name: *s3Req.Key,
+			Name:   *s3Req.Key,
 		}
 	} else if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
@@ -446,7 +445,7 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 		s3Req.Bucket = &bucket
 		headInfo, err := handler.S3Client.HeadObjectRequest(&s3.HeadObjectInput{
 			Bucket: s3Req.Bucket,
-			Key: s3Req.Key,
+			Key:    s3Req.Key,
 		}).Send()
 		if err != nil {
 			writer.WriteHeader(400)
@@ -454,11 +453,11 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 			return
 		}
 		copyResult = CopyResponse{
-			Kind: "storage#rewriteResponse",
+			Kind:                "storage#rewriteResponse",
 			TotalBytesRewritten: *headInfo.ContentLength,
-			ObjectSize: *headInfo.ContentLength,
-			Done: true,
-			Resource: "moo",
+			ObjectSize:          *headInfo.ContentLength,
+			Done:                true,
+			Resource:            "moo",
 		}
 	} else if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
@@ -493,11 +492,11 @@ func (handler *Handler) CopyHandle(writer http.ResponseWriter, request *http.Req
 			return
 		}
 		copyResult = CopyResponse{
-			Kind: "storage#rewriteResponse",
+			Kind:                "storage#rewriteResponse",
 			TotalBytesRewritten: attrs.Size,
-			ObjectSize: attrs.Size,
-			Done: true,
-			Resource: "moo",
+			ObjectSize:          attrs.Size,
+			Done:                true,
+			Resource:            "moo",
 		}
 	}
 	jsonResult, err := json.Marshal(copyResult)
@@ -518,8 +517,8 @@ func (handler *Handler) CopyParseInput(r *http.Request) (*s3.CopyObjectInput, er
 	destKey := vars["destKey"]
 	source := fmt.Sprintf("%s/%s", bucket, key)
 	return &s3.CopyObjectInput{
-		Bucket: &destBucket,
-		Key: &destKey,
+		Bucket:     &destBucket,
+		Key:        &destKey,
 		CopySource: &source,
 	}, nil
 }
@@ -542,7 +541,7 @@ func (handler *Handler) DeleteHandle(writer http.ResponseWriter, request *http.R
 			logging.Log.Error("Error %s %s", request.RequestURI, err)
 			return
 		}
-	} else if handler.Config.IsSet("gcp_destination_config")  {
+	} else if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := handler.GCPRequestSetup(request)
@@ -592,7 +591,7 @@ func (handler *Handler) ComposeHandle(writer http.ResponseWriter, request *http.
 		for i, src := range req.SourceObjects {
 			obj, err := handler.S3Client.GetObjectRequest(&s3.GetObjectInput{
 				Bucket: &bucket,
-				Key: &src.Name,
+				Key:    &src.Name,
 			}).Send()
 			if err != nil {
 				writer.WriteHeader(400)
@@ -607,11 +606,10 @@ func (handler *Handler) ComposeHandle(writer http.ResponseWriter, request *http.
 		}
 
 		uploader := s3manager.NewUploaderWithClient(handler.S3Client)
-		s3Req := &s3manager.UploadInput {
+		s3Req := &s3manager.UploadInput{
 			Bucket: &bucket,
-			Key: &req.Destination.Name,
-			Body: &multiReader,
-
+			Key:    &req.Destination.Name,
+			Body:   &multiReader,
 		}
 		_, err := uploader.Upload(s3Req)
 		if err != nil {
@@ -620,7 +618,7 @@ func (handler *Handler) ComposeHandle(writer http.ResponseWriter, request *http.
 			return
 		}
 
-	} else if handler.Config.IsSet("gcp_destination_config")  {
+	} else if handler.Config.IsSet("gcp_destination_config") {
 		// Use GCS
 		// Log that we are using GCP, get a client based on configurations.  This is from a pool
 		client, err := handler.GCPRequestSetup(request)
@@ -662,8 +660,6 @@ func (handler *Handler) ComposeParseInput(r *http.Request) (*storage2.ComposeReq
 	return &req, nil
 }
 
-
 func New(gcsHandler *gcs_handler.Handler) *Handler {
 	return &Handler{gcsHandler, sync.Mutex{}}
 }
-

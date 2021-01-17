@@ -5,15 +5,15 @@ import (
 )
 
 type CopyResponse struct {
-	Kind string `json:"kind"`
-	TotalBytesRewritten int64 `json:"totalBytesRewritten"`
-	ObjectSize int64 `json:"objectSize"`
-	Done bool `json:"done"`
-	Resource string `json:"resource"`
+	Kind                string `json:"kind"`
+	TotalBytesRewritten int64  `json:"totalBytesRewritten"`
+	ObjectSize          int64  `json:"objectSize"`
+	Done                bool   `json:"done"`
+	Resource            string `json:"resource"`
 }
 
 type MultiObjectReader struct {
-	Readers []io.ReadCloser
+	Readers     []io.ReadCloser
 	readerIndex int
 }
 
@@ -28,7 +28,7 @@ func (multiObjectReader *MultiObjectReader) Read(p []byte) (n int, err error) {
 			err = nil
 		}
 	}
-	return bytesRead ,err
+	return bytesRead, err
 }
 
 func (multiObjectReader *MultiObjectReader) Close() error {
