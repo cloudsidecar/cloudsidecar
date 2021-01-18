@@ -53,7 +53,6 @@ type Object interface {
 
 // Register HTTP patterns to functions
 func (wrapper *Handler) Register(mux *mux.Router) {
-	logging.Log.Infof("Stuff %s", wrapper.Config)
 	keyFromUrl := wrapper.Config.Get("gcp_destination_config.key_from_url")
 	if keyFromUrl != nil && keyFromUrl == true {
 		mux.HandleFunc("/{creds}/storage/v1/b/{bucket}/o/{key:[^#?\\s]+}", wrapper.GetHandle).Methods("GET")
@@ -161,7 +160,6 @@ func (handler *Handler) UploadMultipartParseInput(r *http.Request) (*s3manager.U
 		Key:    &key,
 	}
 	var reader *multipart.Reader
-	logging.Log.Debugf("%v", r.Header)
 	if header := r.Header.Get("Content-Type"); header != "" {
 		s3Req.ContentType = &header
 		mediaType, params, _ := mime.ParseMediaType(*s3Req.ContentType)
@@ -237,7 +235,7 @@ func (handler *Handler) UploadMultipartHandle(writer http.ResponseWriter, reques
 			// return connection to pool after done
 			defer handler.ReturnConnection(client, request)
 		}
-		logging.Log.Infof("Got headers %s %s", *s3Req.Key, *s3Req.ContentType)
+		logging.Log.Debugf("Got headers %s %s", *s3Req.Key, *s3Req.ContentType)
 		if err != nil {
 			writer.WriteHeader(400)
 			logging.Log.Error("Error a %s %s", request.RequestURI, err)

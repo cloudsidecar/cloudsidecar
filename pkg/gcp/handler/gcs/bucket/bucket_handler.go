@@ -35,7 +35,6 @@ func New(gcsHandler *gcs_handler.Handler) *Handler {
 
 // Register HTTP patterns to functions
 func (wrapper *Handler) Register(mux *mux.Router) {
-	logging.Log.Infof("Stuff %s", wrapper.Config)
 	keyFromUrl := wrapper.Config.Get("gcp_destination_config.key_from_url")
 	if keyFromUrl != nil && keyFromUrl == true {
 		mux.HandleFunc("/{creds}/storage/v1/b/{bucket}/o", wrapper.ListHandle).Methods("GET")
